@@ -7,12 +7,17 @@ vi.mock("./_core/llm", () => ({
   invokeLLM: vi.fn().mockResolvedValue({
     choices: [{
       message: {
-        content: JSON.stringify({
-          drivers: [
-            { segment: "Mass", period: "Historical (2020-2025)", content: "New retail model disruption", source: "Chart analysis" },
-            { segment: "Mid", period: "Forecast (2025-2030)", content: "Competitive squeeze expected", source: "Expert notes" },
-          ]
-        })
+        content: `• **Mass segment outgrowing** thanks to new retail model disruption and geographic expansion:
+  – Luckin's low-cost app-based platform captured price-sensitive consumers seeking convenience
+  – Tier-2+ cities showing strong adoption as coffee consumption habit spreads beyond tier-1
+
+• **Mid segment facing competitive squeeze** from both mass and premium players:
+  – Tier-1 market saturation and rising costs limiting expansion opportunities
+  – Product differentiation and quality positioning becoming key growth levers
+
+• **Premium segment losing share** to domestic value-oriented brands:
+  – International chains struggling against local competitors' aggressive pricing
+  – Large-store model increasingly unviable outside tier-1 cities`
       }
     }]
   })
@@ -31,12 +36,12 @@ function createPublicContext(): TrpcContext {
   };
 }
 
-describe("copilot.extractDrivers", () => {
-  it("extracts drivers from provided inputs", async () => {
+describe("copilot.generateWording", () => {
+  it("generates wording directly from inputs", async () => {
     const ctx = createPublicContext();
     const caller = appRouter.createCaller(ctx);
 
-    const result = await caller.copilot.extractDrivers({
+    const result = await caller.copilot.generateWording({
       chartImage: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
       pdfFiles: [],
       bossComments: "Mass segment is growing fastest",
@@ -45,16 +50,9 @@ describe("copilot.extractDrivers", () => {
       framework: "breakdown",
     });
 
-    expect(result).toHaveProperty("drivers");
-    expect(Array.isArray(result.drivers)).toBe(true);
-    expect(result.drivers.length).toBeGreaterThan(0);
-    
-    // Check driver structure
-    const firstDriver = result.drivers[0];
-    expect(firstDriver).toHaveProperty("segment");
-    expect(firstDriver).toHaveProperty("period");
-    expect(firstDriver).toHaveProperty("content");
-    expect(firstDriver).toHaveProperty("source");
+    expect(result).toHaveProperty("wording");
+    expect(typeof result.wording).toBe("string");
+    expect(result.wording.length).toBeGreaterThan(0);
   });
 
   it("handles different framework types", async () => {
@@ -64,7 +62,7 @@ describe("copilot.extractDrivers", () => {
     const frameworks = ["breakdown", "time", "hybrid"] as const;
     
     for (const framework of frameworks) {
-      const result = await caller.copilot.extractDrivers({
+      const result = await caller.copilot.generateWording({
         chartImage: "data:image/png;base64,test",
         pdfFiles: [],
         bossComments: "Test comment",
@@ -73,69 +71,59 @@ describe("copilot.extractDrivers", () => {
         framework,
       });
 
-      expect(result).toHaveProperty("drivers");
+      expect(result).toHaveProperty("wording");
+      expect(typeof result.wording).toBe("string");
     }
-  });
-});
-
-describe("copilot.generateWording", () => {
-  it("generates wording from approved drivers", async () => {
-    // Re-mock for wording generation
-    const llmModule = await import("./_core/llm");
-    vi.mocked(llmModule.invokeLLM).mockResolvedValueOnce({
-      choices: [{
-        message: {
-          content: `• **Mass segment outgrowing, driven by new retail model:**
-  – Low-cost platforms capturing price-sensitive consumers
-  – Tier-2+ cities showing strong growth
-
-• **Mid segment facing competitive squeeze:**
-  – Tier-1 saturation limiting expansion
-  – Product differentiation becoming key lever`
-        }
-      }]
-    } as any);
-
-    const ctx = createPublicContext();
-    const caller = appRouter.createCaller(ctx);
-
-    const result = await caller.copilot.generateWording({
-      drivers: [
-        { segment: "Mass", period: "Historical", content: "New retail model disruption", source: "Chart" },
-        { segment: "Mid", period: "Forecast", content: "Competitive squeeze", source: "Expert" },
-      ],
-      framework: "breakdown",
-      chartImage: "data:image/png;base64,test",
-    });
-
-    expect(result).toHaveProperty("wording");
-    expect(typeof result.wording).toBe("string");
-    expect(result.wording.length).toBeGreaterThan(0);
   });
 
   it("returns wording with bullet point format", async () => {
-    // Re-mock for this specific test
-    const llmModule = await import("./_core/llm");
-    vi.mocked(llmModule.invokeLLM).mockResolvedValueOnce({
-      choices: [{
-        message: {
-          content: `• **Mass segment outgrowing:**\n  – Test sub-bullet one\n  – Test sub-bullet two`
-        }
-      }]
-    } as any);
-
     const ctx = createPublicContext();
     const caller = appRouter.createCaller(ctx);
 
     const result = await caller.copilot.generateWording({
-      drivers: [
-        { segment: "Mass", period: "Historical", content: "Test driver", source: "Test" },
-      ],
+      chartImage: "data:image/png;base64,test",
+      pdfFiles: [],
+      bossComments: "Test",
+      expertNotes: "",
+      otherMaterials: "",
       framework: "breakdown",
-      chartImage: "",
     });
 
     // The wording should contain bullet points
     expect(result.wording).toContain("•");
+  });
+
+  it("returns wording with sub-bullets", async () => {
+    const ctx = createPublicContext();
+    const caller = appRouter.createCaller(ctx);
+
+    const result = await caller.copilot.generateWording({
+      chartImage: "data:image/png;base64,test",
+      pdfFiles: [],
+      bossComments: "Test",
+      expertNotes: "",
+      otherMaterials: "",
+      framework: "breakdown",
+    });
+
+    // The wording should contain sub-bullets (en-dash)
+    expect(result.wording).toContain("–");
+  });
+
+  it("returns wording with bold formatting", async () => {
+    const ctx = createPublicContext();
+    const caller = appRouter.createCaller(ctx);
+
+    const result = await caller.copilot.generateWording({
+      chartImage: "data:image/png;base64,test",
+      pdfFiles: [],
+      bossComments: "Test",
+      expertNotes: "",
+      otherMaterials: "",
+      framework: "breakdown",
+    });
+
+    // The wording should contain bold text
+    expect(result.wording).toContain("**");
   });
 });

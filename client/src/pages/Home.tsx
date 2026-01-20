@@ -9,16 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
-import { Upload, FileText, Image, MessageSquare, Sparkles, Copy, RefreshCw, Check, X, ChevronRight, Loader2 } from "lucide-react";
-
-type Driver = {
-  id: string;
-  segment: string;
-  period: string;
-  content: string;
-  source: string;
-  status: "pending" | "approved" | "rejected" | "revised";
-};
+import { Upload, FileText, Image, Sparkles, Copy, RefreshCw, ChevronRight, Loader2, X } from "lucide-react";
 
 type Framework = "breakdown" | "time" | "hybrid";
 
@@ -33,15 +24,11 @@ export default function Home() {
   const [framework, setFramework] = useState<Framework>("breakdown");
 
   // Workflow states
-  const [step, setStep] = useState<"input" | "drivers" | "output">("input");
-  const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [currentDriverIndex, setCurrentDriverIndex] = useState(0);
+  const [step, setStep] = useState<"input" | "output">("input");
   const [generatedWording, setGeneratedWording] = useState("");
-  const [isExtracting, setIsExtracting] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
 
-  // tRPC mutations
-  const extractDrivers = trpc.copilot.extractDrivers.useMutation();
+  // tRPC mutation
   const generateWording = trpc.copilot.generateWording.useMutation();
 
   const handleChartUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -63,13 +50,13 @@ export default function Home() {
     setPdfFiles(prev => prev.filter((_, i) => i !== index));
   }, []);
 
-  const handleExtractDrivers = async () => {
+  const handleGenerate = async () => {
     if (!chartImage) {
       toast.error("Please upload a chart image first");
       return;
     }
 
-    setIsExtracting(true);
+    setIsGenerating(true);
     try {
       // Convert files to base64
       const chartBase64 = chartPreview || "";
@@ -84,70 +71,13 @@ export default function Home() {
         pdfContents.push(base64);
       }
 
-      const result = await extractDrivers.mutateAsync({
+      const result = await generateWording.mutateAsync({
         chartImage: chartBase64,
         pdfFiles: pdfContents,
         bossComments,
         expertNotes,
         otherMaterials,
         framework,
-      });
-
-      setDrivers(result.drivers.map((d: { segment: string; period: string; content: string; source: string }, i: number) => ({
-        id: `driver-${i}`,
-        segment: d.segment,
-        period: d.period,
-        content: d.content,
-        source: d.source,
-        status: "pending" as const,
-      })));
-      setCurrentDriverIndex(0);
-      setStep("drivers");
-      toast.success(`Extracted ${result.drivers.length} drivers for review`);
-    } catch (error) {
-      toast.error("Failed to extract drivers. Please try again.");
-      console.error(error);
-    } finally {
-      setIsExtracting(false);
-    }
-  };
-
-  const handleDriverAction = (action: "approve" | "reject" | "revise", revision?: string) => {
-    setDrivers(prev => prev.map((d, i) => 
-      i === currentDriverIndex 
-        ? { ...d, status: action === "approve" ? "approved" : action === "reject" ? "rejected" : "revised", content: revision || d.content }
-        : d
-    ));
-
-    if (currentDriverIndex < drivers.length - 1) {
-      setCurrentDriverIndex(prev => prev + 1);
-    } else {
-      // All drivers reviewed
-      const approvedDrivers = drivers.filter((d: Driver, i: number) => 
-        i === currentDriverIndex ? action !== "reject" : d.status !== "rejected"
-      );
-      if (approvedDrivers.length === 0) {
-        toast.error("At least one driver must be approved");
-        return;
-      }
-      handleGenerateWording();
-    }
-  };
-
-  const handleGenerateWording = async () => {
-    setIsGenerating(true);
-    try {
-      const approvedDrivers = drivers.filter(d => d.status === "approved" || d.status === "revised");
-      
-      const result = await generateWording.mutateAsync({
-        drivers: approvedDrivers.map(d => ({
-          segment: d.segment,
-          period: d.period,
-          content: d.content,
-          source: d.source,
-        })),
-        framework,
-        chartImage: chartPreview || "",
       });
 
       setGeneratedWording(result.wording);
@@ -166,18 +96,43 @@ export default function Home() {
     toast.success("Copied to clipboard!");
   };
 
-  const handleRegenerate = () => {
-    handleGenerateWording();
+  const handleRegenerate = async () => {
+    setIsGenerating(true);
+    try {
+      const chartBase64 = chartPreview || "";
+      const pdfContents: string[] = [];
+      
+      for (const pdf of pdfFiles) {
+        const reader = new FileReader();
+        const base64 = await new Promise<string>((resolve) => {
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(pdf);
+        });
+        pdfContents.push(base64);
+      }
+
+      const result = await generateWording.mutateAsync({
+        chartImage: chartBase64,
+        pdfFiles: pdfContents,
+        bossComments,
+        expertNotes,
+        otherMaterials,
+        framework,
+      });
+
+      setGeneratedWording(result.wording);
+      toast.success("Wording regenerated!");
+    } catch (error) {
+      toast.error("Failed to regenerate. Please try again.");
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleStartOver = () => {
     setStep("input");
-    setDrivers([]);
-    setCurrentDriverIndex(0);
     setGeneratedWording("");
   };
-
-  const currentDriver = drivers[currentDriverIndex];
 
   return (
     <div className="min-h-screen bg-background">
@@ -197,9 +152,7 @@ export default function Home() {
             <div className="flex items-center gap-2">
               <Badge variant={step === "input" ? "default" : "secondary"}>1. Input</Badge>
               <ChevronRight className="w-4 h-4 text-muted-foreground" />
-              <Badge variant={step === "drivers" ? "default" : "secondary"}>2. Review</Badge>
-              <ChevronRight className="w-4 h-4 text-muted-foreground" />
-              <Badge variant={step === "output" ? "default" : "secondary"}>3. Output</Badge>
+              <Badge variant={step === "output" ? "default" : "secondary"}>2. Output</Badge>
             </div>
           </div>
         </div>
@@ -394,18 +347,18 @@ export default function Home() {
               <Button 
                 className="w-full" 
                 size="lg"
-                onClick={handleExtractDrivers}
-                disabled={!chartImage || isExtracting}
+                onClick={handleGenerate}
+                disabled={!chartImage || isGenerating}
               >
-                {isExtracting ? (
+                {isGenerating ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Extracting Drivers...
+                    Generating Wording...
                   </>
                 ) : (
                   <>
                     <Sparkles className="w-4 h-4 mr-2" />
-                    Extract Drivers
+                    Generate Wording
                   </>
                 )}
               </Button>
@@ -413,105 +366,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* Step 2: Driver Review */}
-        {step === "drivers" && currentDriver && (
-          <div className="max-w-3xl mx-auto">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <MessageSquare className="w-5 h-5" />
-                    Review Driver {currentDriverIndex + 1} of {drivers.length}
-                  </CardTitle>
-                  <Badge variant="outline">
-                    {drivers.filter(d => d.status === "approved" || d.status === "revised").length} approved
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label className="text-muted-foreground">Segment</Label>
-                    <p className="font-medium">{currentDriver.segment}</p>
-                  </div>
-                  <div>
-                    <Label className="text-muted-foreground">Period</Label>
-                    <p className="font-medium">{currentDriver.period}</p>
-                  </div>
-                </div>
-
-                <div>
-                  <Label className="text-muted-foreground">Driver Content</Label>
-                  <div className="mt-2 p-4 bg-muted rounded-lg">
-                    <p className="text-foreground">{currentDriver.content}</p>
-                  </div>
-                </div>
-
-                <div>
-                  <Label className="text-muted-foreground">Source</Label>
-                  <p className="text-sm text-muted-foreground">{currentDriver.source}</p>
-                </div>
-
-                <Separator />
-
-                <div className="flex gap-3">
-                  <Button 
-                    className="flex-1" 
-                    onClick={() => handleDriverAction("approve")}
-                  >
-                    <Check className="w-4 h-4 mr-2" />
-                    Approve
-                  </Button>
-                  <Button 
-                    variant="destructive" 
-                    className="flex-1"
-                    onClick={() => handleDriverAction("reject")}
-                  >
-                    <X className="w-4 h-4 mr-2" />
-                    Reject
-                  </Button>
-                </div>
-
-                <div className="flex justify-between text-sm text-muted-foreground">
-                  <button 
-                    onClick={() => setCurrentDriverIndex(prev => Math.max(0, prev - 1))}
-                    disabled={currentDriverIndex === 0}
-                    className="hover:text-foreground disabled:opacity-50"
-                  >
-                    ← Previous
-                  </button>
-                  <button 
-                    onClick={() => setCurrentDriverIndex(prev => Math.min(drivers.length - 1, prev + 1))}
-                    disabled={currentDriverIndex === drivers.length - 1}
-                    className="hover:text-foreground disabled:opacity-50"
-                  >
-                    Next →
-                  </button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Progress indicator */}
-            <div className="mt-6 flex gap-1">
-              {drivers.map((d, i) => (
-                <div 
-                  key={d.id}
-                  className={`h-2 flex-1 rounded-full transition-colors ${
-                    d.status === "approved" || d.status === "revised" 
-                      ? "bg-green-500" 
-                      : d.status === "rejected" 
-                        ? "bg-red-500" 
-                        : i === currentDriverIndex 
-                          ? "bg-primary" 
-                          : "bg-muted"
-                  }`}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Step 3: Output */}
+        {/* Step 2: Output */}
         {step === "output" && (
           <div className="max-w-4xl mx-auto">
             <Card>
@@ -547,8 +402,6 @@ export default function Home() {
                 <div className="flex items-center justify-between">
                   <div className="text-sm text-muted-foreground">
                     <span className="font-medium">Format:</span> {framework === "breakdown" ? "By Segment" : framework === "time" ? "By Time" : "Hybrid"}
-                    <span className="mx-2">•</span>
-                    <span className="font-medium">Drivers used:</span> {drivers.filter(d => d.status === "approved" || d.status === "revised").length}
                   </div>
                   <Button variant="ghost" onClick={handleStartOver}>
                     Start Over

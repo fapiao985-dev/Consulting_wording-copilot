@@ -8,3 +8,9 @@
 - [x] AI-powered wording generation with LLM integration
 - [x] Wording preview with copy and regenerate functionality
 - [x] Bain-style format validation (3-4 bullets, 2 sub-bullets, ~120 words)
+
+## v1.1 Iteration
+
+- [x] Re-learn Bain wording style from reference deck
+- [x] Update LLM prompt with correct wording format
+- [x] Remove driver approval workflow - generate directly
