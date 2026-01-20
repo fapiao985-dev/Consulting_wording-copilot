@@ -36,20 +36,35 @@ EXAMPLE OUTPUT (Milk Market):
   – Rising demand for "fresh" and functional dairy products spurred a shift from ambient milk to chilled fresh milk, boosting overall category expansion
   – Enhanced cold chain infrastructure addressed past hurdles in transportation, storage, and distribution for short-shelf-life chilled milk
 
-• Ambient milk, with longer shelf life, gained some MS during pandemic, primarily due to lock-down that hindered fresh milk production and logistics
+• Ambient milk, with longer shelf life, gained some MS during pandemic, primarily due to lock-down that hindered fresh milk production and logistics`;
 
-EXAMPLE OUTPUT (Coffee Market by Price Segment):
-• **Mass segment outgrowing** thanks to new retail model disruption and geographic expansion:
-  – Luckin's low-cost app-based platform captured price-sensitive consumers seeking convenience
-  – Tier-2+ cities showing strong adoption as coffee consumption habit spreads beyond tier-1
+const SOURCE_CITATION_PROMPT = `You are a research analyst. Your task is to identify the SOURCE of each claim/driver in the wording.
 
-• **Mid segment facing competitive squeeze** from both mass and premium players:
-  – Tier-1 market saturation and rising costs limiting expansion opportunities
-  – Product differentiation and quality positioning becoming key growth levers
+For each main bullet and sub-bullet in the wording, identify which source(s) support it:
+- [Boss] = From boss comments
+- [Expert] = From expert call notes  
+- [PDF: filename] = From a specific PDF research report
+- [Other] = From other materials provided
+- [Chart] = Directly observable from the chart image
+- [General Knowledge] = Industry common knowledge (no specific source)
 
-• **Premium segment losing share** to domestic value-oriented brands:
-  – International chains struggling against local competitors' aggressive pricing
-  – Large-store model increasingly unviable outside tier-1 cities`;
+OUTPUT FORMAT (JSON):
+{
+  "citations": [
+    {
+      "bullet": "The exact bullet text",
+      "sources": [
+        {
+          "type": "Boss" | "Expert" | "PDF" | "Other" | "Chart" | "General Knowledge",
+          "detail": "Specific quote or reference from the source",
+          "location": "e.g., 'PDF page 3', 'Expert call - market trends section', 'Boss comment about Mass segment'"
+        }
+      ]
+    }
+  ]
+}
+
+Be specific about WHERE in each source the information comes from. If a claim combines multiple sources, list all of them.`;
 
 export const appRouter = router({
   system: systemRouter,
@@ -63,28 +78,36 @@ export const appRouter = router({
   }),
 
   copilot: router({
-    // Simplified: directly generate wording without driver approval
+    // Generate wording with source citations
     generateWording: publicProcedure
       .input(z.object({
         chartImage: z.string(),
-        pdfFiles: z.array(z.string()),
+        pdfFiles: z.array(z.object({
+          name: z.string(),
+          content: z.string(),
+        })),
         bossComments: z.string(),
         expertNotes: z.string(),
         otherMaterials: z.string(),
         framework: z.enum(["breakdown", "time", "hybrid"]),
       }))
       .mutation(async ({ input }) => {
-        // Build context from all inputs
+        // Build context from all inputs with clear labels
         const contextParts: string[] = [];
         
         if (input.bossComments) {
-          contextParts.push(`BOSS COMMENTS:\n${input.bossComments}`);
+          contextParts.push(`[SOURCE: BOSS COMMENTS]\n${input.bossComments}`);
         }
         if (input.expertNotes) {
-          contextParts.push(`EXPERT CALL NOTES:\n${input.expertNotes}`);
+          contextParts.push(`[SOURCE: EXPERT CALL NOTES]\n${input.expertNotes}`);
         }
         if (input.otherMaterials) {
-          contextParts.push(`OTHER MATERIALS:\n${input.otherMaterials}`);
+          contextParts.push(`[SOURCE: OTHER MATERIALS]\n${input.otherMaterials}`);
+        }
+        if (input.pdfFiles.length > 0) {
+          for (const pdf of input.pdfFiles) {
+            contextParts.push(`[SOURCE: PDF - ${pdf.name}]\n${pdf.content || "(PDF content not extracted)"}`);
+          }
         }
 
         const frameworkInstruction = input.framework === "breakdown" 
@@ -93,14 +116,13 @@ export const appRouter = router({
           ? "Organize by TIME PERIOD: Each main bullet focuses on one time period (e.g., Historical, Forecast). Explain what drove growth in each period."
           : "Organize by SEGMENT × TIME: Each main bullet focuses on one segment, with sub-bullets showing its evolution over time.";
 
-        // Build messages for LLM
-        const messages: Array<{ role: "system" | "user" | "assistant"; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> }> = [
+        // Step 1: Generate wording
+        const wordingMessages: Array<{ role: "system" | "user" | "assistant"; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> }> = [
           { role: "system", content: BAIN_WORDING_SYSTEM_PROMPT },
         ];
 
-        // Add chart image if provided
         if (input.chartImage && input.chartImage.startsWith("data:image")) {
-          messages.push({
+          wordingMessages.push({
             role: "user",
             content: [
               { type: "text", text: "Analyze this market chart. Identify which segments are growing faster/slower. DO NOT repeat any numbers from this chart in your output:" },
@@ -109,23 +131,14 @@ export const appRouter = router({
           });
         }
 
-        // Add text context
         if (contextParts.length > 0) {
-          messages.push({
+          wordingMessages.push({
             role: "user",
             content: `Research materials and context:\n\n${contextParts.join("\n\n---\n\n")}`
           });
         }
 
-        // Add PDF content hints
-        if (input.pdfFiles.length > 0) {
-          messages.push({
-            role: "user",
-            content: `${input.pdfFiles.length} PDF research reports have been provided for context.`
-          });
-        }
-
-        messages.push({
+        wordingMessages.push({
           role: "user",
           content: `Framework: ${frameworkInstruction}
 
@@ -138,19 +151,16 @@ Generate the Bain-style "Highlights" wording now. Remember:
 - Bold 2-4 key phrases`
         });
 
+        let wording = "";
         try {
-          const response = await invokeLLM({
-            messages: messages as any,
+          const wordingResponse = await invokeLLM({
+            messages: wordingMessages as any,
           });
-
-          const rawContent = response.choices[0]?.message?.content;
-          const wording = typeof rawContent === 'string' ? rawContent : '';
-          return { wording };
+          const rawContent = wordingResponse.choices[0]?.message?.content;
+          wording = typeof rawContent === 'string' ? rawContent : '';
         } catch (error) {
           console.error("Wording generation error:", error);
-          // Return example wording if LLM fails
-          return {
-            wording: `• **Mass segment outgrowing** thanks to new retail model disruption and geographic expansion:
+          wording = `• **Mass segment outgrowing** thanks to new retail model disruption and geographic expansion:
   – Luckin's low-cost app-based platform captured price-sensitive consumers seeking convenience
   – Tier-2+ cities showing strong adoption as coffee consumption habit spreads beyond tier-1
 
@@ -160,9 +170,81 @@ Generate the Bain-style "Highlights" wording now. Remember:
 
 • **Premium segment losing share** to domestic value-oriented brands:
   – International chains struggling against local competitors' aggressive pricing
-  – Large-store model increasingly unviable outside tier-1 cities`
-          };
+  – Large-store model increasingly unviable outside tier-1 cities`;
         }
+
+        // Step 2: Generate source citations
+        let citations: Array<{
+          bullet: string;
+          sources: Array<{
+            type: string;
+            detail: string;
+            location: string;
+          }>;
+        }> = [];
+
+        try {
+          const citationMessages: Array<{ role: "system" | "user"; content: string }> = [
+            { role: "system", content: SOURCE_CITATION_PROMPT },
+            { 
+              role: "user", 
+              content: `Here is the generated wording:\n\n${wording}\n\n---\n\nHere are all the sources that were provided:\n\n${contextParts.join("\n\n---\n\n")}\n\n---\n\nFor each bullet point in the wording, identify which source(s) it came from. Be specific about the location within each source.`
+            }
+          ];
+
+          const citationResponse = await invokeLLM({
+            messages: citationMessages,
+            response_format: {
+              type: "json_schema",
+              json_schema: {
+                name: "source_citations",
+                strict: true,
+                schema: {
+                  type: "object",
+                  properties: {
+                    citations: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          bullet: { type: "string", description: "The bullet text" },
+                          sources: {
+                            type: "array",
+                            items: {
+                              type: "object",
+                              properties: {
+                                type: { type: "string", description: "Source type: Boss, Expert, PDF, Other, Chart, or General Knowledge" },
+                                detail: { type: "string", description: "Specific quote or reference" },
+                                location: { type: "string", description: "Where in the source" }
+                              },
+                              required: ["type", "detail", "location"],
+                              additionalProperties: false
+                            }
+                          }
+                        },
+                        required: ["bullet", "sources"],
+                        additionalProperties: false
+                      }
+                    }
+                  },
+                  required: ["citations"],
+                  additionalProperties: false
+                }
+              }
+            }
+          });
+
+          const citationContent = citationResponse.choices[0]?.message?.content;
+          if (typeof citationContent === 'string') {
+            const parsed = JSON.parse(citationContent);
+            citations = parsed.citations || [];
+          }
+        } catch (error) {
+          console.error("Citation generation error:", error);
+          // Return empty citations if generation fails
+        }
+
+        return { wording, citations };
       }),
   }),
 });

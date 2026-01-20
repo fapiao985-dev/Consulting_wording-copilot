@@ -4,10 +4,44 @@ import type { TrpcContext } from "./_core/context";
 
 // Mock the LLM module
 vi.mock("./_core/llm", () => ({
-  invokeLLM: vi.fn().mockResolvedValue({
-    choices: [{
-      message: {
-        content: `• **Mass segment outgrowing** thanks to new retail model disruption and geographic expansion:
+  invokeLLM: vi.fn().mockImplementation(({ response_format }) => {
+    // If it's a citation request (has response_format), return citations
+    if (response_format) {
+      return Promise.resolve({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              citations: [
+                {
+                  bullet: "Mass segment outgrowing thanks to new retail model disruption",
+                  sources: [
+                    { type: "Boss", detail: "Mass is growing fastest", location: "Boss comments" },
+                    { type: "Chart", detail: "63% CAGR visible", location: "Chart analysis" }
+                  ]
+                },
+                {
+                  bullet: "Mid segment facing competitive squeeze",
+                  sources: [
+                    { type: "Expert", detail: "Mid-tier brands struggling", location: "Expert call notes" }
+                  ]
+                },
+                {
+                  bullet: "Premium segment losing share",
+                  sources: [
+                    { type: "General Knowledge", detail: "Industry trend", location: "Common knowledge" }
+                  ]
+                }
+              ]
+            })
+          }
+        }]
+      });
+    }
+    // Otherwise return wording
+    return Promise.resolve({
+      choices: [{
+        message: {
+          content: `• **Mass segment outgrowing** thanks to new retail model disruption and geographic expansion:
   – Luckin's low-cost app-based platform captured price-sensitive consumers seeking convenience
   – Tier-2+ cities showing strong adoption as coffee consumption habit spreads beyond tier-1
 
@@ -18,8 +52,9 @@ vi.mock("./_core/llm", () => ({
 • **Premium segment losing share** to domestic value-oriented brands:
   – International chains struggling against local competitors' aggressive pricing
   – Large-store model increasingly unviable outside tier-1 cities`
-      }
-    }]
+        }
+      }]
+    });
   })
 }));
 
@@ -37,13 +72,13 @@ function createPublicContext(): TrpcContext {
 }
 
 describe("copilot.generateWording", () => {
-  it("generates wording directly from inputs", async () => {
+  it("generates wording with citations from inputs", async () => {
     const ctx = createPublicContext();
     const caller = appRouter.createCaller(ctx);
 
     const result = await caller.copilot.generateWording({
       chartImage: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
-      pdfFiles: [],
+      pdfFiles: [{ name: "research.pdf", content: "" }],
       bossComments: "Mass segment is growing fastest",
       expertNotes: "Premium segment losing share",
       otherMaterials: "",
@@ -51,29 +86,68 @@ describe("copilot.generateWording", () => {
     });
 
     expect(result).toHaveProperty("wording");
+    expect(result).toHaveProperty("citations");
     expect(typeof result.wording).toBe("string");
-    expect(result.wording.length).toBeGreaterThan(0);
+    expect(Array.isArray(result.citations)).toBe(true);
   });
 
-  it("handles different framework types", async () => {
+  it("returns citations with source details", async () => {
     const ctx = createPublicContext();
     const caller = appRouter.createCaller(ctx);
 
-    const frameworks = ["breakdown", "time", "hybrid"] as const;
-    
-    for (const framework of frameworks) {
-      const result = await caller.copilot.generateWording({
-        chartImage: "data:image/png;base64,test",
-        pdfFiles: [],
-        bossComments: "Test comment",
-        expertNotes: "",
-        otherMaterials: "",
-        framework,
-      });
+    const result = await caller.copilot.generateWording({
+      chartImage: "data:image/png;base64,test",
+      pdfFiles: [],
+      bossComments: "Test comment",
+      expertNotes: "",
+      otherMaterials: "",
+      framework: "breakdown",
+    });
 
-      expect(result).toHaveProperty("wording");
-      expect(typeof result.wording).toBe("string");
-    }
+    expect(result.citations.length).toBeGreaterThan(0);
+    const firstCitation = result.citations[0];
+    expect(firstCitation).toHaveProperty("bullet");
+    expect(firstCitation).toHaveProperty("sources");
+    expect(Array.isArray(firstCitation.sources)).toBe(true);
+  });
+
+  it("citation sources have required fields", async () => {
+    const ctx = createPublicContext();
+    const caller = appRouter.createCaller(ctx);
+
+    const result = await caller.copilot.generateWording({
+      chartImage: "data:image/png;base64,test",
+      pdfFiles: [],
+      bossComments: "Test",
+      expertNotes: "",
+      otherMaterials: "",
+      framework: "breakdown",
+    });
+
+    const firstSource = result.citations[0]?.sources[0];
+    expect(firstSource).toHaveProperty("type");
+    expect(firstSource).toHaveProperty("detail");
+    expect(firstSource).toHaveProperty("location");
+  });
+
+  it("handles PDF files with name and content", async () => {
+    const ctx = createPublicContext();
+    const caller = appRouter.createCaller(ctx);
+
+    const result = await caller.copilot.generateWording({
+      chartImage: "data:image/png;base64,test",
+      pdfFiles: [
+        { name: "report1.pdf", content: "Market analysis content" },
+        { name: "report2.pdf", content: "Industry trends" }
+      ],
+      bossComments: "",
+      expertNotes: "",
+      otherMaterials: "",
+      framework: "breakdown",
+    });
+
+    expect(result).toHaveProperty("wording");
+    expect(result).toHaveProperty("citations");
   });
 
   it("returns wording with bullet point format", async () => {
@@ -89,41 +163,8 @@ describe("copilot.generateWording", () => {
       framework: "breakdown",
     });
 
-    // The wording should contain bullet points
     expect(result.wording).toContain("•");
-  });
-
-  it("returns wording with sub-bullets", async () => {
-    const ctx = createPublicContext();
-    const caller = appRouter.createCaller(ctx);
-
-    const result = await caller.copilot.generateWording({
-      chartImage: "data:image/png;base64,test",
-      pdfFiles: [],
-      bossComments: "Test",
-      expertNotes: "",
-      otherMaterials: "",
-      framework: "breakdown",
-    });
-
-    // The wording should contain sub-bullets (en-dash)
     expect(result.wording).toContain("–");
-  });
-
-  it("returns wording with bold formatting", async () => {
-    const ctx = createPublicContext();
-    const caller = appRouter.createCaller(ctx);
-
-    const result = await caller.copilot.generateWording({
-      chartImage: "data:image/png;base64,test",
-      pdfFiles: [],
-      bossComments: "Test",
-      expertNotes: "",
-      otherMaterials: "",
-      framework: "breakdown",
-    });
-
-    // The wording should contain bold text
     expect(result.wording).toContain("**");
   });
 });

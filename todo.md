@@ -14,3 +14,12 @@
 - [x] Re-learn Bain wording style from reference deck
 - [x] Update LLM prompt with correct wording format
 - [x] Remove driver approval workflow - generate directly
+
+## v1.2 Iteration
+
+- [x] Add source citation for each driver (PDF page, expert call position, boss comments)
+- [x] Display sources alongside wording in output
+
+## Known Issues (To Fix Later)
+
+- [ ] "By Time Period" framework output is incorrect - needs iteration

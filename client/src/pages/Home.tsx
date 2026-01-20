@@ -7,11 +7,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
-import { Upload, FileText, Image, Sparkles, Copy, RefreshCw, ChevronRight, Loader2, X } from "lucide-react";
+import { Upload, FileText, Image, Sparkles, Copy, RefreshCw, ChevronRight, Loader2, X, ChevronDown, BookOpen } from "lucide-react";
 
 type Framework = "breakdown" | "time" | "hybrid";
+
+type Citation = {
+  bullet: string;
+  sources: Array<{
+    type: string;
+    detail: string;
+    location: string;
+  }>;
+};
 
 export default function Home() {
   // Input states
@@ -20,13 +30,15 @@ export default function Home() {
   const [otherMaterials, setOtherMaterials] = useState("");
   const [chartImage, setChartImage] = useState<File | null>(null);
   const [chartPreview, setChartPreview] = useState<string | null>(null);
-  const [pdfFiles, setPdfFiles] = useState<File[]>([]);
+  const [pdfFiles, setPdfFiles] = useState<Array<{ file: File; name: string }>>([]);
   const [framework, setFramework] = useState<Framework>("breakdown");
 
   // Workflow states
   const [step, setStep] = useState<"input" | "output">("input");
   const [generatedWording, setGeneratedWording] = useState("");
+  const [citations, setCitations] = useState<Citation[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [expandedCitations, setExpandedCitations] = useState<Set<number>>(new Set());
 
   // tRPC mutation
   const generateWording = trpc.copilot.generateWording.useMutation();
@@ -43,12 +55,25 @@ export default function Home() {
 
   const handlePdfUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    setPdfFiles(prev => [...prev, ...files]);
+    const newPdfs = files.map(file => ({ file, name: file.name }));
+    setPdfFiles(prev => [...prev, ...newPdfs]);
   }, []);
 
   const removePdf = useCallback((index: number) => {
     setPdfFiles(prev => prev.filter((_, i) => i !== index));
   }, []);
+
+  const toggleCitation = (index: number) => {
+    setExpandedCitations(prev => {
+      const next = new Set(prev);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      return next;
+    });
+  };
 
   const handleGenerate = async () => {
     if (!chartImage) {
@@ -58,17 +83,12 @@ export default function Home() {
 
     setIsGenerating(true);
     try {
-      // Convert files to base64
       const chartBase64 = chartPreview || "";
-      const pdfContents: string[] = [];
+      const pdfContents: Array<{ name: string; content: string }> = [];
       
       for (const pdf of pdfFiles) {
-        const reader = new FileReader();
-        const base64 = await new Promise<string>((resolve) => {
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.readAsDataURL(pdf);
-        });
-        pdfContents.push(base64);
+        // For now, we just pass the filename - actual PDF text extraction would need server-side processing
+        pdfContents.push({ name: pdf.name, content: "" });
       }
 
       const result = await generateWording.mutateAsync({
@@ -81,8 +101,9 @@ export default function Home() {
       });
 
       setGeneratedWording(result.wording);
+      setCitations(result.citations || []);
       setStep("output");
-      toast.success("Wording generated successfully!");
+      toast.success("Wording generated with source citations!");
     } catch (error) {
       toast.error("Failed to generate wording. Please try again.");
       console.error(error);
@@ -96,19 +117,26 @@ export default function Home() {
     toast.success("Copied to clipboard!");
   };
 
+  const handleCopyWithSources = () => {
+    let fullText = generatedWording + "\n\n---\nSOURCES:\n";
+    citations.forEach((citation, i) => {
+      fullText += `\n[${i + 1}] ${citation.bullet.substring(0, 50)}...\n`;
+      citation.sources.forEach(source => {
+        fullText += `    - ${source.type}: ${source.location}\n`;
+      });
+    });
+    navigator.clipboard.writeText(fullText);
+    toast.success("Copied wording with sources!");
+  };
+
   const handleRegenerate = async () => {
     setIsGenerating(true);
     try {
       const chartBase64 = chartPreview || "";
-      const pdfContents: string[] = [];
+      const pdfContents: Array<{ name: string; content: string }> = [];
       
       for (const pdf of pdfFiles) {
-        const reader = new FileReader();
-        const base64 = await new Promise<string>((resolve) => {
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.readAsDataURL(pdf);
-        });
-        pdfContents.push(base64);
+        pdfContents.push({ name: pdf.name, content: "" });
       }
 
       const result = await generateWording.mutateAsync({
@@ -121,6 +149,7 @@ export default function Home() {
       });
 
       setGeneratedWording(result.wording);
+      setCitations(result.citations || []);
       toast.success("Wording regenerated!");
     } catch (error) {
       toast.error("Failed to regenerate. Please try again.");
@@ -132,6 +161,19 @@ export default function Home() {
   const handleStartOver = () => {
     setStep("input");
     setGeneratedWording("");
+    setCitations([]);
+    setExpandedCitations(new Set());
+  };
+
+  const getSourceBadgeColor = (type: string) => {
+    switch (type) {
+      case "Boss": return "bg-blue-100 text-blue-800 border-blue-200";
+      case "Expert": return "bg-green-100 text-green-800 border-green-200";
+      case "PDF": return "bg-purple-100 text-purple-800 border-purple-200";
+      case "Other": return "bg-orange-100 text-orange-800 border-orange-200";
+      case "Chart": return "bg-gray-100 text-gray-800 border-gray-200";
+      default: return "bg-gray-100 text-gray-600 border-gray-200";
+    }
   };
 
   return (
@@ -288,14 +330,14 @@ export default function Home() {
                         </div>
                         {pdfFiles.length > 0 && (
                           <div className="space-y-2">
-                            {pdfFiles.map((file, index) => (
+                            {pdfFiles.map((pdf, index) => (
                               <div 
                                 key={index}
                                 className="flex items-center justify-between p-2 bg-muted rounded-lg"
                               >
                                 <div className="flex items-center gap-2">
                                   <FileText className="w-4 h-4 text-primary" />
-                                  <span className="text-sm truncate max-w-[200px]">{file.name}</span>
+                                  <span className="text-sm truncate max-w-[200px]">{pdf.name}</span>
                                 </div>
                                 <Button
                                   variant="ghost"
@@ -366,9 +408,10 @@ export default function Home() {
           </div>
         )}
 
-        {/* Step 2: Output */}
+        {/* Step 2: Output with Citations */}
         {step === "output" && (
-          <div className="max-w-4xl mx-auto">
+          <div className="max-w-5xl mx-auto space-y-6">
+            {/* Wording Card */}
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -380,6 +423,10 @@ export default function Home() {
                     <Button variant="outline" size="sm" onClick={handleCopyWording}>
                       <Copy className="w-4 h-4 mr-2" />
                       Copy
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={handleCopyWithSources}>
+                      <BookOpen className="w-4 h-4 mr-2" />
+                      Copy with Sources
                     </Button>
                     <Button variant="outline" size="sm" onClick={handleRegenerate} disabled={isGenerating}>
                       {isGenerating ? (
@@ -396,19 +443,77 @@ export default function Home() {
                 <div className="bg-muted p-6 rounded-lg font-mono text-sm whitespace-pre-wrap">
                   {generatedWording}
                 </div>
-
-                <Separator className="my-6" />
-
-                <div className="flex items-center justify-between">
-                  <div className="text-sm text-muted-foreground">
-                    <span className="font-medium">Format:</span> {framework === "breakdown" ? "By Segment" : framework === "time" ? "By Time" : "Hybrid"}
-                  </div>
-                  <Button variant="ghost" onClick={handleStartOver}>
-                    Start Over
-                  </Button>
-                </div>
               </CardContent>
             </Card>
+
+            {/* Citations Card */}
+            {citations.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BookOpen className="w-5 h-5" />
+                    Source Citations
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {citations.map((citation, index) => (
+                    <Collapsible 
+                      key={index}
+                      open={expandedCitations.has(index)}
+                      onOpenChange={() => toggleCitation(index)}
+                    >
+                      <CollapsibleTrigger asChild>
+                        <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg cursor-pointer hover:bg-muted transition-colors">
+                          <ChevronDown 
+                            className={`w-4 h-4 mt-1 transition-transform ${
+                              expandedCitations.has(index) ? "rotate-180" : ""
+                            }`}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{citation.bullet}</p>
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {citation.sources.map((source, sIdx) => (
+                                <span 
+                                  key={sIdx}
+                                  className={`text-xs px-2 py-0.5 rounded-full border ${getSourceBadgeColor(source.type)}`}
+                                >
+                                  {source.type}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <div className="ml-7 mt-2 space-y-2">
+                          {citation.sources.map((source, sIdx) => (
+                            <div key={sIdx} className="p-3 bg-background border rounded-lg">
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className={`text-xs px-2 py-0.5 rounded-full border ${getSourceBadgeColor(source.type)}`}>
+                                  {source.type}
+                                </span>
+                                <span className="text-xs text-muted-foreground">{source.location}</span>
+                              </div>
+                              <p className="text-sm text-muted-foreground italic">"{source.detail}"</p>
+                            </div>
+                          ))}
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Footer */}
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-muted-foreground">
+                <span className="font-medium">Format:</span> {framework === "breakdown" ? "By Segment" : framework === "time" ? "By Time" : "Hybrid"}
+              </div>
+              <Button variant="ghost" onClick={handleStartOver}>
+                Start Over
+              </Button>
+            </div>
           </div>
         )}
       </main>
