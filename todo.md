@@ -23,3 +23,10 @@
 ## Known Issues (To Fix Later)
 
 - [ ] "By Time Period" framework output is incorrect - needs iteration
+
+## v1.3 Iteration - Fix PDF Citation Issue
+
+- [x] Implement server-side PDF text extraction
+- [x] Update frontend to read and send PDF content
+- [x] Update LLM prompt to prioritize research report citations over General Knowledge
+- [x] Ensure citations reference specific PDF content, not just "General Knowledge"

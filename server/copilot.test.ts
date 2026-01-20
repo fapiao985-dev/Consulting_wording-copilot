@@ -168,3 +168,18 @@ describe("copilot.generateWording", () => {
     expect(result.wording).toContain("**");
   });
 });
+
+describe("copilot.extractPdfContent", () => {
+  it("extracts content from PDF using vision API", async () => {
+    const ctx = createPublicContext();
+    const caller = appRouter.createCaller(ctx);
+
+    const result = await caller.copilot.extractPdfContent({
+      pdfBase64: "data:image/png;base64,test",
+      filename: "test_report.pdf",
+    });
+
+    expect(result).toHaveProperty("content");
+    expect(typeof result.content).toBe("string");
+  });
+});

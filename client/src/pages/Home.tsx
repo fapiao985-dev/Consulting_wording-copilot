@@ -8,9 +8,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
-import { Upload, FileText, Image, Sparkles, Copy, RefreshCw, ChevronRight, Loader2, X, ChevronDown, BookOpen } from "lucide-react";
+import { Upload, FileText, Image, Sparkles, Copy, RefreshCw, ChevronRight, Loader2, X, ChevronDown, BookOpen, CheckCircle } from "lucide-react";
 
 type Framework = "breakdown" | "time" | "hybrid";
 
@@ -23,6 +24,13 @@ type Citation = {
   }>;
 };
 
+type PdfFile = {
+  file: File;
+  name: string;
+  content: string;
+  status: "pending" | "extracting" | "done" | "error";
+};
+
 export default function Home() {
   // Input states
   const [bossComments, setBossComments] = useState("");
@@ -30,7 +38,7 @@ export default function Home() {
   const [otherMaterials, setOtherMaterials] = useState("");
   const [chartImage, setChartImage] = useState<File | null>(null);
   const [chartPreview, setChartPreview] = useState<string | null>(null);
-  const [pdfFiles, setPdfFiles] = useState<Array<{ file: File; name: string }>>([]);
+  const [pdfFiles, setPdfFiles] = useState<PdfFile[]>([]);
   const [framework, setFramework] = useState<Framework>("breakdown");
 
   // Workflow states
@@ -39,9 +47,11 @@ export default function Home() {
   const [citations, setCitations] = useState<Citation[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [expandedCitations, setExpandedCitations] = useState<Set<number>>(new Set());
+  const [extractionProgress, setExtractionProgress] = useState(0);
 
-  // tRPC mutation
+  // tRPC mutations
   const generateWording = trpc.copilot.generateWording.useMutation();
+  const extractPdfContent = trpc.copilot.extractPdfContent.useMutation();
 
   const handleChartUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -53,11 +63,54 @@ export default function Home() {
     }
   }, []);
 
-  const handlePdfUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePdfUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    const newPdfs = files.map(file => ({ file, name: file.name }));
+    const newPdfs: PdfFile[] = files.map(file => ({ 
+      file, 
+      name: file.name, 
+      content: "",
+      status: "pending" as const
+    }));
     setPdfFiles(prev => [...prev, ...newPdfs]);
-  }, []);
+
+    // Extract content from each PDF
+    for (let i = 0; i < newPdfs.length; i++) {
+      const pdf = newPdfs[i];
+      
+      // Update status to extracting
+      setPdfFiles(prev => prev.map(p => 
+        p.name === pdf.name ? { ...p, status: "extracting" as const } : p
+      ));
+
+      try {
+        // Convert PDF to base64 for vision API
+        const base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(pdf.file);
+        });
+
+        // Extract content using LLM vision
+        const result = await extractPdfContent.mutateAsync({
+          pdfBase64: base64,
+          filename: pdf.name,
+        });
+
+        // Update with extracted content
+        setPdfFiles(prev => prev.map(p => 
+          p.name === pdf.name ? { ...p, content: result.content, status: "done" as const } : p
+        ));
+
+        toast.success(`Extracted content from ${pdf.name}`);
+      } catch (error) {
+        console.error("PDF extraction error:", error);
+        setPdfFiles(prev => prev.map(p => 
+          p.name === pdf.name ? { ...p, status: "error" as const } : p
+        ));
+        toast.error(`Failed to extract ${pdf.name}`);
+      }
+    }
+  }, [extractPdfContent]);
 
   const removePdf = useCallback((index: number) => {
     setPdfFiles(prev => prev.filter((_, i) => i !== index));
@@ -81,15 +134,25 @@ export default function Home() {
       return;
     }
 
+    // Check if any PDFs are still extracting
+    const extractingPdfs = pdfFiles.filter(p => p.status === "extracting");
+    if (extractingPdfs.length > 0) {
+      toast.error("Please wait for PDF extraction to complete");
+      return;
+    }
+
     setIsGenerating(true);
+    setExtractionProgress(0);
+
     try {
       const chartBase64 = chartPreview || "";
-      const pdfContents: Array<{ name: string; content: string }> = [];
       
-      for (const pdf of pdfFiles) {
-        // For now, we just pass the filename - actual PDF text extraction would need server-side processing
-        pdfContents.push({ name: pdf.name, content: "" });
-      }
+      // Use extracted PDF content
+      const pdfContents = pdfFiles
+        .filter(p => p.status === "done" && p.content)
+        .map(p => ({ name: p.name, content: p.content }));
+
+      setExtractionProgress(50);
 
       const result = await generateWording.mutateAsync({
         chartImage: chartBase64,
@@ -100,6 +163,7 @@ export default function Home() {
         framework,
       });
 
+      setExtractionProgress(100);
       setGeneratedWording(result.wording);
       setCitations(result.citations || []);
       setStep("output");
@@ -109,6 +173,7 @@ export default function Home() {
       console.error(error);
     } finally {
       setIsGenerating(false);
+      setExtractionProgress(0);
     }
   };
 
@@ -123,6 +188,9 @@ export default function Home() {
       fullText += `\n[${i + 1}] ${citation.bullet.substring(0, 50)}...\n`;
       citation.sources.forEach(source => {
         fullText += `    - ${source.type}: ${source.location}\n`;
+        if (source.detail) {
+          fullText += `      "${source.detail}"\n`;
+        }
       });
     });
     navigator.clipboard.writeText(fullText);
@@ -133,11 +201,9 @@ export default function Home() {
     setIsGenerating(true);
     try {
       const chartBase64 = chartPreview || "";
-      const pdfContents: Array<{ name: string; content: string }> = [];
-      
-      for (const pdf of pdfFiles) {
-        pdfContents.push({ name: pdf.name, content: "" });
-      }
+      const pdfContents = pdfFiles
+        .filter(p => p.status === "done" && p.content)
+        .map(p => ({ name: p.name, content: p.content }));
 
       const result = await generateWording.mutateAsync({
         chartImage: chartBase64,
@@ -172,7 +238,16 @@ export default function Home() {
       case "PDF": return "bg-purple-100 text-purple-800 border-purple-200";
       case "Other": return "bg-orange-100 text-orange-800 border-orange-200";
       case "Chart": return "bg-gray-100 text-gray-800 border-gray-200";
-      default: return "bg-gray-100 text-gray-600 border-gray-200";
+      default: return "bg-yellow-100 text-yellow-800 border-yellow-200";
+    }
+  };
+
+  const getPdfStatusIcon = (status: PdfFile["status"]) => {
+    switch (status) {
+      case "extracting": return <Loader2 className="w-4 h-4 animate-spin text-primary" />;
+      case "done": return <CheckCircle className="w-4 h-4 text-green-600" />;
+      case "error": return <X className="w-4 h-4 text-red-600" />;
+      default: return <FileText className="w-4 h-4 text-muted-foreground" />;
     }
   };
 
@@ -319,9 +394,12 @@ export default function Home() {
                             <p className="text-sm text-muted-foreground">
                               Upload research reports (PDF)
                             </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Content will be automatically extracted
+                            </p>
                             <input
                               type="file"
-                              accept=".pdf"
+                              accept=".pdf,image/*"
                               multiple
                               onChange={handlePdfUpload}
                               className="hidden"
@@ -333,11 +411,22 @@ export default function Home() {
                             {pdfFiles.map((pdf, index) => (
                               <div 
                                 key={index}
-                                className="flex items-center justify-between p-2 bg-muted rounded-lg"
+                                className="flex items-center justify-between p-3 bg-muted rounded-lg"
                               >
-                                <div className="flex items-center gap-2">
-                                  <FileText className="w-4 h-4 text-primary" />
-                                  <span className="text-sm truncate max-w-[200px]">{pdf.name}</span>
+                                <div className="flex items-center gap-3 flex-1 min-w-0">
+                                  {getPdfStatusIcon(pdf.status)}
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-sm truncate block">{pdf.name}</span>
+                                    {pdf.status === "extracting" && (
+                                      <span className="text-xs text-muted-foreground">Extracting content...</span>
+                                    )}
+                                    {pdf.status === "done" && (
+                                      <span className="text-xs text-green-600">Content extracted</span>
+                                    )}
+                                    {pdf.status === "error" && (
+                                      <span className="text-xs text-red-600">Extraction failed</span>
+                                    )}
+                                  </div>
                                 </div>
                                 <Button
                                   variant="ghost"
@@ -386,16 +475,30 @@ export default function Home() {
                 </CardContent>
               </Card>
 
+              {isGenerating && extractionProgress > 0 && (
+                <div className="space-y-2">
+                  <Progress value={extractionProgress} />
+                  <p className="text-xs text-muted-foreground text-center">
+                    {extractionProgress < 50 ? "Processing inputs..." : "Generating wording..."}
+                  </p>
+                </div>
+              )}
+
               <Button 
                 className="w-full" 
                 size="lg"
                 onClick={handleGenerate}
-                disabled={!chartImage || isGenerating}
+                disabled={!chartImage || isGenerating || pdfFiles.some(p => p.status === "extracting")}
               >
                 {isGenerating ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     Generating Wording...
+                  </>
+                ) : pdfFiles.some(p => p.status === "extracting") ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Extracting PDFs...
                   </>
                 ) : (
                   <>
@@ -470,7 +573,7 @@ export default function Home() {
                             }`}
                           />
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{citation.bullet}</p>
+                            <p className="text-sm font-medium">{citation.bullet}</p>
                             <div className="flex flex-wrap gap-1 mt-2">
                               {citation.sources.map((source, sIdx) => (
                                 <span 

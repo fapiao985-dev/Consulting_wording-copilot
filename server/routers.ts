@@ -22,6 +22,7 @@ CRITICAL CONTENT RULES:
 - FOCUS on explaining WHY, not WHAT
 - Include specific examples where relevant (company names, regions, time periods)
 - Use colons (:) to introduce explanations
+- MUST use insights from the provided research reports - do not rely on general knowledge
 
 BAIN LANGUAGE PATTERNS:
 - "driven by", "due to", "spurred by", "attributed to"
@@ -40,13 +41,20 @@ EXAMPLE OUTPUT (Milk Market):
 
 const SOURCE_CITATION_PROMPT = `You are a research analyst. Your task is to identify the SOURCE of each claim/driver in the wording.
 
-For each main bullet and sub-bullet in the wording, identify which source(s) support it:
-- [Boss] = From boss comments
-- [Expert] = From expert call notes  
-- [PDF: filename] = From a specific PDF research report
-- [Other] = From other materials provided
-- [Chart] = Directly observable from the chart image
-- [General Knowledge] = Industry common knowledge (no specific source)
+CRITICAL RULES:
+1. You MUST cite from the provided sources (Boss Comments, Expert Notes, PDF Reports, Other Materials)
+2. "General Knowledge" should be used ONLY as a LAST RESORT when NO other source contains relevant information
+3. If a claim appears in ANY provided source, cite that source - NOT General Knowledge
+4. Be specific about WHERE in each source the information comes from
+5. Quote the exact text from the source when possible
+
+Source Priority (use in this order):
+1. PDF Reports - cite specific content from research reports
+2. Expert Call Notes - cite specific insights from expert interviews
+3. Boss Comments - cite direction from leadership
+4. Other Materials - cite any additional context provided
+5. Chart - for observations directly visible in the chart
+6. General Knowledge - ONLY if none of the above sources contain relevant information
 
 OUTPUT FORMAT (JSON):
 {
@@ -56,15 +64,31 @@ OUTPUT FORMAT (JSON):
       "sources": [
         {
           "type": "Boss" | "Expert" | "PDF" | "Other" | "Chart" | "General Knowledge",
-          "detail": "Specific quote or reference from the source",
-          "location": "e.g., 'PDF page 3', 'Expert call - market trends section', 'Boss comment about Mass segment'"
+          "detail": "EXACT QUOTE from the source that supports this claim",
+          "location": "Specific location: 'PDF: [filename] - [section/topic]', 'Expert call - [topic discussed]', 'Boss comment about [topic]'"
         }
       ]
     }
   ]
 }
 
-Be specific about WHERE in each source the information comes from. If a claim combines multiple sources, list all of them.`;
+IMPORTANT: If you cannot find a specific source for a claim, reconsider whether that claim should be in the wording at all. The wording should be based on provided research, not general knowledge.`;
+
+// PDF extraction prompt
+const PDF_EXTRACTION_PROMPT = `You are a research analyst. Extract key market insights from this PDF research report.
+
+Focus on extracting:
+1. Market size data and growth rates
+2. Key drivers of market growth/decline
+3. Segment-specific trends (by price tier, product type, geography, etc.)
+4. Competitive dynamics and company-specific insights
+5. Consumer behavior trends
+6. Future outlook and forecasts
+7. Specific data points, statistics, and quotes
+
+Format your extraction as structured notes with clear section headers.
+Include page numbers or section references where possible.
+Quote exact text when it contains important data or insights.`;
 
 export const appRouter = router({
   system: systemRouter,
@@ -78,6 +102,34 @@ export const appRouter = router({
   }),
 
   copilot: router({
+    // Extract text from PDF using vision
+    extractPdfContent: publicProcedure
+      .input(z.object({
+        pdfBase64: z.string(),
+        filename: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        try {
+          const response = await invokeLLM({
+            messages: [
+              { role: "system", content: PDF_EXTRACTION_PROMPT },
+              {
+                role: "user",
+                content: [
+                  { type: "text", text: `Extract key market insights from this research report: ${input.filename}` },
+                  { type: "image_url", image_url: { url: input.pdfBase64 } }
+                ]
+              }
+            ] as any,
+          });
+          const content = response.choices[0]?.message?.content;
+          return { content: typeof content === 'string' ? content : '' };
+        } catch (error) {
+          console.error("PDF extraction error:", error);
+          return { content: '' };
+        }
+      }),
+
     // Generate wording with source citations
     generateWording: publicProcedure
       .input(z.object({
@@ -94,19 +146,26 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         // Build context from all inputs with clear labels
         const contextParts: string[] = [];
+        const availableSources: string[] = [];
         
-        if (input.bossComments) {
+        if (input.bossComments && input.bossComments.trim()) {
           contextParts.push(`[SOURCE: BOSS COMMENTS]\n${input.bossComments}`);
+          availableSources.push("Boss Comments");
         }
-        if (input.expertNotes) {
+        if (input.expertNotes && input.expertNotes.trim()) {
           contextParts.push(`[SOURCE: EXPERT CALL NOTES]\n${input.expertNotes}`);
+          availableSources.push("Expert Call Notes");
         }
-        if (input.otherMaterials) {
+        if (input.otherMaterials && input.otherMaterials.trim()) {
           contextParts.push(`[SOURCE: OTHER MATERIALS]\n${input.otherMaterials}`);
+          availableSources.push("Other Materials");
         }
         if (input.pdfFiles.length > 0) {
           for (const pdf of input.pdfFiles) {
-            contextParts.push(`[SOURCE: PDF - ${pdf.name}]\n${pdf.content || "(PDF content not extracted)"}`);
+            if (pdf.content && pdf.content.trim()) {
+              contextParts.push(`[SOURCE: PDF - ${pdf.name}]\n${pdf.content}`);
+              availableSources.push(`PDF: ${pdf.name}`);
+            }
           }
         }
 
@@ -134,7 +193,7 @@ export const appRouter = router({
         if (contextParts.length > 0) {
           wordingMessages.push({
             role: "user",
-            content: `Research materials and context:\n\n${contextParts.join("\n\n---\n\n")}`
+            content: `IMPORTANT: Use insights from these research materials to write the wording. Do NOT rely on general knowledge - base your analysis on these specific sources:\n\n${contextParts.join("\n\n---\n\n")}`
           });
         }
 
@@ -148,7 +207,8 @@ Generate the Bain-style "Highlights" wording now. Remember:
 - 100-150 words total
 - DO NOT repeat chart numbers
 - Focus on WHY, not WHAT
-- Bold 2-4 key phrases`
+- Bold 2-4 key phrases
+- BASE YOUR ANALYSIS ON THE PROVIDED RESEARCH MATERIALS`
         });
 
         let wording = "";
@@ -188,7 +248,9 @@ Generate the Bain-style "Highlights" wording now. Remember:
             { role: "system", content: SOURCE_CITATION_PROMPT },
             { 
               role: "user", 
-              content: `Here is the generated wording:\n\n${wording}\n\n---\n\nHere are all the sources that were provided:\n\n${contextParts.join("\n\n---\n\n")}\n\n---\n\nFor each bullet point in the wording, identify which source(s) it came from. Be specific about the location within each source.`
+              content: `Here is the generated wording:\n\n${wording}\n\n---\n\nHere are ALL the sources that were provided (you MUST cite from these):\n\n${contextParts.join("\n\n---\n\n")}\n\n---\n\nAvailable source types: ${availableSources.join(", ")}\n\nFor each bullet point in the wording, identify which source(s) it came from. 
+              
+CRITICAL: You MUST cite from the provided sources above. "General Knowledge" should ONLY be used if NONE of the provided sources contain relevant information. Quote the exact text from sources when possible.`
             }
           ];
 
@@ -214,8 +276,8 @@ Generate the Bain-style "Highlights" wording now. Remember:
                               type: "object",
                               properties: {
                                 type: { type: "string", description: "Source type: Boss, Expert, PDF, Other, Chart, or General Knowledge" },
-                                detail: { type: "string", description: "Specific quote or reference" },
-                                location: { type: "string", description: "Where in the source" }
+                                detail: { type: "string", description: "EXACT QUOTE from the source" },
+                                location: { type: "string", description: "Specific location in the source" }
                               },
                               required: ["type", "detail", "location"],
                               additionalProperties: false
