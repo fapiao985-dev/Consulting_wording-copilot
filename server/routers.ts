@@ -63,6 +63,21 @@ Pattern B - Trend as L1 (use when highlighting market dynamics):
 • [Market trend statement with key insight - one complete sentence]
   – [Supporting reason or evidence]
 
+SUB-BULLET TIME ORDERING RULE:
+When sub-bullets correspond to different time periods (e.g., one for historical, one for future):
+- ALWAYS put historical period ('19-'24) FIRST
+- ALWAYS put future period ('24-'30E) SECOND
+
+CORRECT Example:
+• High-grade: Outgrowing overall market driven by premiumization and new product launches
+  – '19-'24: New UMF20+ products drove price premium and attracted health-conscious consumers
+  – '24-'30E: Brand investment in high-grade positioning expected to continue momentum
+
+WRONG Example (future before historical):
+• High-grade: Outgrowing overall market
+  – '24-'30E: Expected to continue growth
+  – '19-'24: Historical growth was strong
+
 CRITICAL CONTENT RULES:
 - DO NOT say "value growth" - the chart already shows market value, this is redundant
 - DO NOT repeat ANY numbers from the chart (CAGR, market size, percentages)
@@ -318,6 +333,67 @@ export const appRouter = router({
         }
       }),
 
+    // Extract chart title using Vision API for industry validation
+    extractChartTitle: publicProcedure
+      .input(z.object({
+        chartImage: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        try {
+          const response = await invokeLLM({
+            messages: [
+              { 
+                role: "system", 
+                content: `You are a chart analysis assistant. Extract the title and industry/market name from the chart image.
+
+Return a JSON object with:
+- title: The exact title text shown on the chart (if visible)
+- industry: The industry or market being analyzed (e.g., "现制咖啡", "新能源汽车", "Manuka Honey", "医美")
+- confidence: "high" if clearly visible, "medium" if inferred, "low" if uncertain
+
+Focus on identifying:
+1. The main title at the top of the chart
+2. Any subtitle or description
+3. The industry/market being analyzed based on segment names, axis labels, or context`
+              },
+              {
+                role: "user",
+                content: [
+                  { type: "text", text: "Extract the title and industry from this chart:" },
+                  { type: "image_url", image_url: { url: input.chartImage } }
+                ]
+              }
+            ] as any,
+            response_format: {
+              type: "json_schema",
+              json_schema: {
+                name: "chart_title_extraction",
+                strict: true,
+                schema: {
+                  type: "object",
+                  properties: {
+                    title: { type: "string", description: "The exact title text from the chart" },
+                    industry: { type: "string", description: "The industry or market being analyzed" },
+                    confidence: { type: "string", enum: ["high", "medium", "low"], description: "Confidence level of extraction" }
+                  },
+                  required: ["title", "industry", "confidence"],
+                  additionalProperties: false
+                }
+              }
+            }
+          });
+
+          const content = response.choices[0]?.message?.content;
+          if (typeof content === 'string') {
+            return JSON.parse(content);
+          }
+          return { title: '', industry: '', confidence: 'low' };
+        } catch (error) {
+          console.error("Chart title extraction error:", error);
+          return { title: '', industry: '', confidence: 'low' };
+        }
+      }),
+
     // Web search for additional market data - with industry filtering
     webSearch: publicProcedure
       .input(z.object({
@@ -472,7 +548,8 @@ Relevance: [why this matters for ${input.industry} analysis]`
   – [Supporting detail]
 Each main bullet focuses on one segment (e.g., High-grade, Low-grade). Explain why each segment growing fast/slow.
 MUST cover BOTH historical ('19-'24) AND future ('24-'30E) trends SEPARATELY - never use '19-'30E.
-IMPORTANT: Since you have sub-bullets, the main bullet should be ONE complete sentence WITHOUT semicolons.`
+IMPORTANT: Since you have sub-bullets, the main bullet should be ONE complete sentence WITHOUT semicolons.
+SUB-BULLET TIME ORDER: If sub-bullets correspond to time periods, put historical ('19-'24) FIRST, then future ('24-'30E).`
           : input.framework === "time"
           ? `Organize by TIME PERIOD:
 • '19-'24: [what happened + why in ONE complete sentence]
@@ -480,13 +557,15 @@ IMPORTANT: Since you have sub-bullets, the main bullet should be ONE complete se
 • '24-'30E: [outlook + drivers in ONE complete sentence]
   – [Supporting detail]
 Each main bullet focuses on one time period. Explain what drove growth in each period.
-IMPORTANT: Since you have sub-bullets, the main bullet should be ONE complete sentence WITHOUT semicolons.`
+IMPORTANT: Since you have sub-bullets, the main bullet should be ONE complete sentence WITHOUT semicolons.
+MAIN BULLET ORDER: Historical period ('19-'24) FIRST, then future period ('24-'30E).`
           : `Organize by SEGMENT × TIME:
 • [Segment Name]: [overall trend in ONE complete sentence]
   – '19-'24: [historical trend + reason]
   – '24-'30E: [future outlook + drivers]
 Each main bullet focuses on one segment, with sub-bullets showing its evolution over time.
-IMPORTANT: Since you have sub-bullets, the main bullet should be ONE complete sentence WITHOUT semicolons.`;
+IMPORTANT: Since you have sub-bullets, the main bullet should be ONE complete sentence WITHOUT semicolons.
+SUB-BULLET TIME ORDER: Historical ('19-'24) MUST come FIRST, then future ('24-'30E).`;
 
         // Step 1: Generate wording
         const wordingMessages: Array<{ role: "system" | "user" | "assistant"; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> }> = [

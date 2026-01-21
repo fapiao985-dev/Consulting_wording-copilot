@@ -74,3 +74,13 @@
 ### Pattern-level issues
 - [x] Avoid full timeline wording ('19-'30E spanning entire period - useless)
 - [x] Fix semicolon usage: if L1 bullet has sub-bullets, write L1 as one complete sentence without semicolons
+
+## v1.8 Iteration - User Feedback Fixes
+
+### Pattern-level issue
+- [x] Sub-bullet time ordering: when sub-bullets correspond to time periods, historical ('19-'24) should come before future ('24-'30E)
+
+### Chart validation
+- [x] Extract chart title using Vision API
+- [x] Compare extracted title with user-entered industry
+- [x] Show dialog if mismatch, prompt user to re-enter industry

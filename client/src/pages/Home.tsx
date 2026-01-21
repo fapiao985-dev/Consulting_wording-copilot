@@ -11,6 +11,8 @@ import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { Upload, FileText, Image, Sparkles, Copy, RefreshCw, ChevronRight, Loader2, X, ChevronDown, BookOpen, CheckCircle, Globe, ExternalLink, Building2 } from "lucide-react";
@@ -44,7 +46,13 @@ export default function Home() {
   const [pdfFiles, setPdfFiles] = useState<PdfFile[]>([]);
   const [framework, setFramework] = useState<Framework>("breakdown");
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
-  const [industry, setIndustry] = useState(""); // New: industry input for source filtering
+  const [industry, setIndustry] = useState(""); // Industry input for source filtering
+
+  // Chart title validation states
+  const [chartIndustry, setChartIndustry] = useState<string | null>(null);
+  const [chartTitle, setChartTitle] = useState<string | null>(null);
+  const [showMismatchDialog, setShowMismatchDialog] = useState(false);
+  const [isExtractingTitle, setIsExtractingTitle] = useState(false);
 
   // Workflow states
   const [step, setStep] = useState<"input" | "output">("input");
@@ -59,16 +67,39 @@ export default function Home() {
   const generateWording = trpc.copilot.generateWording.useMutation();
   const extractPdfContent = trpc.copilot.extractPdfContent.useMutation();
   const webSearch = trpc.copilot.webSearch.useMutation();
+  const extractChartTitle = trpc.copilot.extractChartTitle.useMutation();
 
-  const handleChartUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChartUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setChartImage(file);
       const reader = new FileReader();
-      reader.onloadend = () => setChartPreview(reader.result as string);
+      reader.onloadend = async () => {
+        const base64 = reader.result as string;
+        setChartPreview(base64);
+        
+        // Extract chart title for industry validation
+        setIsExtractingTitle(true);
+        try {
+          const result = await extractChartTitle.mutateAsync({ chartImage: base64 });
+          if (result.industry) {
+            setChartIndustry(result.industry);
+            setChartTitle(result.title);
+            // Auto-fill industry if empty
+            if (!industry.trim()) {
+              setIndustry(result.industry);
+              toast.success(`Detected industry: ${result.industry}`);
+            }
+          }
+        } catch (error) {
+          console.error("Chart title extraction error:", error);
+        } finally {
+          setIsExtractingTitle(false);
+        }
+      };
       reader.readAsDataURL(file);
     }
-  }, []);
+  }, [extractChartTitle, industry]);
 
   const handlePdfUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -143,6 +174,24 @@ export default function Home() {
     });
   };
 
+  // Check if industry matches chart
+  const checkIndustryMatch = (userIndustry: string, chartIndustry: string | null): boolean => {
+    if (!chartIndustry) return true; // No chart industry detected, skip validation
+    const userLower = userIndustry.toLowerCase().trim();
+    const chartLower = chartIndustry.toLowerCase().trim();
+    
+    // Check for exact match or substring match
+    if (userLower === chartLower) return true;
+    if (userLower.includes(chartLower) || chartLower.includes(userLower)) return true;
+    
+    // Check for common variations
+    const userWords = userLower.split(/[\s,，、]+/);
+    const chartWords = chartLower.split(/[\s,，、]+/);
+    const hasOverlap = userWords.some(w => chartWords.some(cw => w.includes(cw) || cw.includes(w)));
+    
+    return hasOverlap;
+  };
+
   const handleGenerate = async () => {
     if (!chartImage) {
       toast.error("Please upload a chart image first");
@@ -162,6 +211,16 @@ export default function Home() {
       return;
     }
 
+    // Validate industry matches chart (if industry is provided and chart industry was detected)
+    if (industry.trim() && chartIndustry && !checkIndustryMatch(industry, chartIndustry)) {
+      setShowMismatchDialog(true);
+      return;
+    }
+
+    await proceedWithGeneration();
+  };
+
+  const proceedWithGeneration = async () => {
     setIsGenerating(true);
     setExtractionProgress(0);
     setProgressMessage("Processing inputs...");
@@ -351,6 +410,48 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Industry Mismatch Dialog */}
+      <Dialog open={showMismatchDialog} onOpenChange={setShowMismatchDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-500" />
+              Industry Mismatch Detected
+            </DialogTitle>
+            <DialogDescription className="space-y-3 pt-2">
+              <p>The industry you entered does not match the chart:</p>
+              <div className="bg-muted p-3 rounded-lg space-y-2 text-sm">
+                <div><span className="font-medium">Your input:</span> {industry}</div>
+                <div><span className="font-medium">Chart industry:</span> {chartIndustry}</div>
+                {chartTitle && <div><span className="font-medium">Chart title:</span> {chartTitle}</div>}
+              </div>
+              <p>Would you like to update your industry input or proceed anyway?</p>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIndustry(chartIndustry || "");
+                setShowMismatchDialog(false);
+                toast.success(`Industry updated to: ${chartIndustry}`);
+              }}
+            >
+              Use Chart Industry
+            </Button>
+            <Button
+              variant="default"
+              onClick={() => {
+                setShowMismatchDialog(false);
+                proceedWithGeneration();
+              }}
+            >
+              Proceed Anyway
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Header */}
       <header className="border-b border-border bg-card">
         <div className="container py-4">
@@ -398,10 +499,26 @@ export default function Home() {
                         alt="Chart preview" 
                         className="max-h-64 mx-auto rounded-lg shadow-sm"
                       />
+                      {isExtractingTitle && (
+                        <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Detecting industry...
+                        </div>
+                      )}
+                      {chartIndustry && !isExtractingTitle && (
+                        <div className="text-xs text-muted-foreground">
+                          Detected: {chartIndustry}
+                        </div>
+                      )}
                       <Button 
                         variant="outline" 
                         size="sm"
-                        onClick={() => { setChartImage(null); setChartPreview(null); }}
+                        onClick={() => { 
+                          setChartImage(null); 
+                          setChartPreview(null); 
+                          setChartIndustry(null);
+                          setChartTitle(null);
+                        }}
                       >
                         Remove
                       </Button>
@@ -427,7 +544,7 @@ export default function Home() {
 
                 <Separator className="my-6" />
 
-                {/* Industry Input - NEW */}
+                {/* Industry Input */}
                 <div className="space-y-3 mb-6">
                   <div className="flex items-center gap-2">
                     <Building2 className="w-4 h-4 text-muted-foreground" />
@@ -442,6 +559,12 @@ export default function Home() {
                   <p className="text-xs text-muted-foreground">
                     Enter the industry to filter relevant sources (required for web search)
                   </p>
+                  {chartIndustry && industry.trim() && !checkIndustryMatch(industry, chartIndustry) && (
+                    <div className="p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800 flex items-center gap-2">
+                      <AlertTriangle className="w-3 h-3" />
+                      Industry may not match chart ({chartIndustry})
+                    </div>
+                  )}
                 </div>
 
                 <Separator className="my-6" />
