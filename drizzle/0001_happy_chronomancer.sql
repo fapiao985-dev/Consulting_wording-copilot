@@ -1,0 +1,20 @@
+CREATE TABLE `industry_reports` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`industry` varchar(100) NOT NULL,
+	`industryEn` varchar(200),
+	`title` text NOT NULL,
+	`url` text NOT NULL,
+	`sourceName` varchar(100) NOT NULL,
+	`sourceType` enum('Report','Web','WeChat') NOT NULL DEFAULT 'Report',
+	`sourceTier` enum('1','2','3','4','5') NOT NULL DEFAULT '5',
+	`publicationYear` varchar(4),
+	`fileSizeKb` int,
+	`pageCount` int,
+	`insight` text,
+	`relevance` text,
+	`urlValidated` enum('pending','valid','invalid') NOT NULL DEFAULT 'pending',
+	`validatedAt` timestamp,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT `industry_reports_id` PRIMARY KEY(`id`)
+);

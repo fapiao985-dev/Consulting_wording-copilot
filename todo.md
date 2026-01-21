@@ -130,3 +130,33 @@
 - [x] Include source metadata: title, source name, publication date, URL
 - [x] No PDF download required - just valid URLs for citation
 - [x] Created webSearchService.ts with authority source hierarchy
+
+## v2.1 Iteration - Database-backed Industry Report Storage
+
+### Database Schema
+- [x] Create industry_reports table with fields:
+  - id, industry, title, source_name, source_type, source_tier
+  - url, publication_year, file_size_kb, page_count
+  - insight, relevance, validated_at, created_at
+- [x] Add quality validation fields for admission criteria
+
+### Quality Admission Criteria (enforced in database)
+- [x] Source priority: Tier 1 (券商) > Tier 2 (投行) > Tier 3 (咨询) > Tier 4 (研究)
+- [x] File size >200KB
+- [x] Page count >15 pages
+- [x] Publication year 2020-2025
+- [x] Must include data/charts/deep analysis
+- [x] Exclude: 纯目录, 新闻稿, 财报, 摘要, 营销文档
+
+### API Endpoints for Manus Population
+- [x] POST /api/trpc/reports.add - Add validated report to database
+- [x] POST /api/trpc/reports.batchAdd - Batch add reports
+- [x] GET /api/trpc/reports.getByIndustry - List reports by industry
+- [x] GET /api/trpc/reports.listIndustries - List all industries
+- [x] POST /api/trpc/reports.delete - Remove invalid report
+
+### Web App Integration
+- [x] Update webSearch to read from database first
+- [x] Display real URLs from pre-populated data
+- [x] Fallback to LLM if no database results (with warning)
+- [x] Add indicator showing data source (Database vs LLM) with badges

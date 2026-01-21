@@ -15,6 +15,17 @@ import {
   formatSearchResultsForCitation,
   type SearchResult
 } from "./webSearchService";
+import {
+  addIndustryReport,
+  getIndustryReports,
+  getAllIndustryReports,
+  updateReportValidation,
+  deleteIndustryReport,
+  listIndustries,
+  validateReportQuality,
+  getSourceTier,
+  QUALITY_CRITERIA
+} from "./db";
 
 // Authority ranking for source validation
 const AUTHORITY_SOURCES = {
@@ -405,8 +416,8 @@ Focus on identifying:
       }),
 
     // Web search for additional market data - with industry filtering
-    // This uses LLM to synthesize insights and provide search queries for real reports
-    // The actual URLs come from the search queries that users can verify
+    // PRIORITY: First check database for pre-populated real URLs from Manus
+    // FALLBACK: If no database results, use LLM synthesis (with disclaimer)
     webSearch: publicProcedure
       .input(z.object({
         marketContext: z.string(),
@@ -415,6 +426,40 @@ Focus on identifying:
       }))
       .mutation(async ({ input }) => {
         try {
+          // STEP 1: Check database for pre-populated real URLs
+          const dbReports = await getIndustryReports(input.industry, 10);
+          
+          if (dbReports.length > 0) {
+            // We have real URLs from database - use these!
+            const formattedResults = dbReports.map(report => {
+              return `[${report.sourceType}: ${report.sourceName}] (${report.publicationYear || 'N/A'})
+Title: ${report.title}
+URL: ${report.url}
+Insight: ${report.insight || 'See report for details'}
+Relevance: ${report.relevance || 'Industry research report'}`;
+            }).join('\n\n---\n\n');
+            
+            const structuredResults = dbReports.map(report => ({
+              source: report.sourceName,
+              sourceType: report.sourceType,
+              year: report.publicationYear || '',
+              title: report.title,
+              url: report.url,
+              insight: report.insight || '',
+              relevance: report.relevance || '',
+              fromDatabase: true, // Flag indicating real URL
+            }));
+            
+            return {
+              results: formattedResults,
+              queries: [], // No need for search queries when we have real data
+              structuredResults,
+              source: 'database', // Indicate data source
+              reportCount: dbReports.length,
+            };
+          }
+          
+          // STEP 2: Fallback to LLM synthesis if no database results
           // Generate search queries for the industry
           const queries = generateSearchQueries(input.industry);
           
@@ -542,11 +587,13 @@ Relevance: ${item.relevance}`;
           return { 
             results: formattedResults,
             queries,
-            structuredResults: insights
+            structuredResults: insights.map(i => ({ ...i, fromDatabase: false })),
+            source: 'llm', // Indicate this is LLM-synthesized, URLs may not be valid
+            reportCount: insights.length,
           };
         } catch (error) {
           console.error("Web search error:", error);
-          return { results: '', queries: [], structuredResults: [] };
+          return { results: '', queries: [], structuredResults: [], source: 'error', reportCount: 0 };
         }
       }),
 
@@ -775,6 +822,118 @@ CRITICAL:
         }
 
         return { wording, citations };
+      }),
+  }),
+
+  // ============================================
+  // Industry Reports API - For Manus to populate
+  // ============================================
+  reports: router({
+    // Add a new report (used by Manus agent)
+    add: publicProcedure
+      .input(z.object({
+        industry: z.string().min(1),
+        industryEn: z.string().optional(),
+        title: z.string().min(1),
+        url: z.string().url(),
+        sourceName: z.string().min(1),
+        sourceType: z.enum(["Report", "Web", "WeChat"]).default("Report"),
+        publicationYear: z.string().optional(),
+        fileSizeKb: z.number().optional(),
+        pageCount: z.number().optional(),
+        insight: z.string().optional(),
+        relevance: z.string().optional(),
+        urlValidated: z.enum(["pending", "valid", "invalid"]).default("valid"),
+      }))
+      .mutation(async ({ input }) => {
+        // Auto-determine source tier
+        const sourceTier = getSourceTier(input.sourceName);
+        
+        const result = await addIndustryReport({
+          ...input,
+          sourceTier,
+        });
+        
+        return result;
+      }),
+
+    // Batch add reports (for efficiency)
+    batchAdd: publicProcedure
+      .input(z.object({
+        reports: z.array(z.object({
+          industry: z.string().min(1),
+          industryEn: z.string().optional(),
+          title: z.string().min(1),
+          url: z.string().url(),
+          sourceName: z.string().min(1),
+          sourceType: z.enum(["Report", "Web", "WeChat"]).default("Report"),
+          publicationYear: z.string().optional(),
+          fileSizeKb: z.number().optional(),
+          pageCount: z.number().optional(),
+          insight: z.string().optional(),
+          relevance: z.string().optional(),
+        }))
+      }))
+      .mutation(async ({ input }) => {
+        const results = [];
+        for (const report of input.reports) {
+          const sourceTier = getSourceTier(report.sourceName);
+          const result = await addIndustryReport({
+            ...report,
+            sourceTier,
+            urlValidated: "valid",
+          });
+          results.push({ title: report.title, ...result });
+        }
+        return { 
+          total: input.reports.length,
+          successful: results.filter(r => r.success).length,
+          failed: results.filter(r => !r.success).length,
+          results 
+        };
+      }),
+
+    // Get reports for an industry
+    getByIndustry: publicProcedure
+      .input(z.object({
+        industry: z.string().min(1),
+        limit: z.number().default(20),
+      }))
+      .query(async ({ input }) => {
+        const reports = await getIndustryReports(input.industry, input.limit);
+        return { reports, count: reports.length };
+      }),
+
+    // List all available industries
+    listIndustries: publicProcedure
+      .query(async () => {
+        const industries = await listIndustries();
+        return { industries };
+      }),
+
+    // Update report validation status
+    updateValidation: publicProcedure
+      .input(z.object({
+        id: z.number(),
+        status: z.enum(["pending", "valid", "invalid"]),
+      }))
+      .mutation(async ({ input }) => {
+        const success = await updateReportValidation(input.id, input.status);
+        return { success };
+      }),
+
+    // Delete a report
+    delete: publicProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const success = await deleteIndustryReport(input.id);
+        return { success };
+      }),
+
+    // Get quality criteria (for reference)
+    getQualityCriteria: publicProcedure
+      .query(() => {
+        return QUALITY_CRITERIA;
       }),
   }),
 });

@@ -60,6 +60,7 @@ export default function Home() {
   const [expandedCitations, setExpandedCitations] = useState<Set<number>>(new Set());
   const [extractionProgress, setExtractionProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState("");
+  const [webSearchSource, setWebSearchSource] = useState<"database" | "llm" | null>(null); // Track source of web search results
 
   // tRPC mutations
   const generateWording = trpc.copilot.generateWording.useMutation();
@@ -227,10 +228,19 @@ export default function Home() {
             industry: industry.trim(),
           });
           webSearchResults = searchResult.results;
+          // Track the source of web search results
+          if (searchResult.source === 'database') {
+            setWebSearchSource('database');
+            toast.success(`Found ${searchResult.reportCount} validated reports from database`);
+          } else {
+            setWebSearchSource('llm');
+            toast.info('Using AI-synthesized insights (URLs may need verification)');
+          }
           setExtractionProgress(50);
         } catch (error) {
           console.error("Web search error:", error);
           toast.error("Web search failed, continuing without it");
+          setWebSearchSource(null);
         }
       }
 
@@ -754,7 +764,20 @@ export default function Home() {
                     <BookOpen className="w-5 h-5" />
                     Source Citations
                     <Badge variant="outline" className="ml-2">{citations.length} bullets</Badge>
+                    {webSearchSource && (
+                      <Badge 
+                        variant={webSearchSource === 'database' ? 'default' : 'secondary'}
+                        className={`ml-2 ${webSearchSource === 'database' ? 'bg-green-600' : 'bg-yellow-600'}`}
+                      >
+                        {webSearchSource === 'database' ? '✓ Validated URLs' : '⚠ AI-Generated URLs'}
+                      </Badge>
+                    )}
                   </CardTitle>
+                  {webSearchSource === 'llm' && (
+                    <p className="text-xs text-yellow-600 mt-1">
+                      Note: Web search URLs are AI-generated and may not be valid. Ask Manus to populate real URLs for this industry.
+                    </p>
+                  )}
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {citations.map((citation, index) => (
