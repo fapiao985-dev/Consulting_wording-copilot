@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +13,7 @@ import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
-import { Upload, FileText, Image, Sparkles, Copy, RefreshCw, ChevronRight, Loader2, X, ChevronDown, BookOpen, CheckCircle, Globe, ExternalLink, Shield } from "lucide-react";
+import { Upload, FileText, Image, Sparkles, Copy, RefreshCw, ChevronRight, Loader2, X, ChevronDown, BookOpen, CheckCircle, Globe, ExternalLink, Building2 } from "lucide-react";
 
 type Framework = "breakdown" | "time" | "hybrid";
 
@@ -43,6 +44,7 @@ export default function Home() {
   const [pdfFiles, setPdfFiles] = useState<PdfFile[]>([]);
   const [framework, setFramework] = useState<Framework>("breakdown");
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [industry, setIndustry] = useState(""); // New: industry input for source filtering
 
   // Workflow states
   const [step, setStep] = useState<"input" | "output">("input");
@@ -147,6 +149,12 @@ export default function Home() {
       return;
     }
 
+    // Check if industry is provided when web search is enabled
+    if (webSearchEnabled && !industry.trim()) {
+      toast.error("Please enter the industry name for web search");
+      return;
+    }
+
     // Check if any PDFs are still extracting
     const extractingPdfs = pdfFiles.filter(p => p.status === "extracting");
     if (extractingPdfs.length > 0) {
@@ -170,8 +178,8 @@ export default function Home() {
 
       // Run web search if enabled
       let webSearchResults = "";
-      if (webSearchEnabled) {
-        setProgressMessage("Searching for authoritative sources...");
+      if (webSearchEnabled && industry.trim()) {
+        setProgressMessage(`Searching for ${industry} industry sources...`);
         setExtractionProgress(30);
         
         const marketContext = [
@@ -185,6 +193,7 @@ export default function Home() {
           const searchResult = await webSearch.mutateAsync({
             marketContext,
             chartDescription: "Market chart with segment breakdown",
+            industry: industry.trim(),
           });
           webSearchResults = searchResult.results;
           setExtractionProgress(50);
@@ -206,6 +215,7 @@ export default function Home() {
         framework,
         webSearchEnabled,
         webSearchResults,
+        industry: industry.trim() || undefined,
       });
 
       setExtractionProgress(100);
@@ -257,7 +267,7 @@ export default function Home() {
 
       // Run web search if enabled
       let webSearchResults = "";
-      if (webSearchEnabled) {
+      if (webSearchEnabled && industry.trim()) {
         const marketContext = [
           bossComments,
           expertNotes,
@@ -269,6 +279,7 @@ export default function Home() {
           const searchResult = await webSearch.mutateAsync({
             marketContext,
             chartDescription: "Market chart with segment breakdown",
+            industry: industry.trim(),
           });
           webSearchResults = searchResult.results;
         } catch (error) {
@@ -285,6 +296,7 @@ export default function Home() {
         framework,
         webSearchEnabled,
         webSearchResults,
+        industry: industry.trim() || undefined,
       });
 
       setGeneratedWording(result.wording);
@@ -315,25 +327,6 @@ export default function Home() {
       case "Chart": return "bg-gray-100 text-gray-800 border-gray-200";
       default: return "bg-yellow-100 text-yellow-800 border-yellow-200";
     }
-  };
-
-  const getSourceTierBadge = (type: string, location: string) => {
-    // Check for authority tier based on location/source name
-    const locationLower = location.toLowerCase();
-    const tier1 = ["广发", "天风", "国金", "中信", "招商", "华泰", "国海", "东方"];
-    const tier2 = ["morgan stanley", "goldman", "jp morgan", "bofa", "credit suisse", "ubs", "citi"];
-    const tier3 = ["艾瑞", "灼识", "久谦", "艺恩", "德勤", "deloitte", "麦肯锡", "mckinsey", "bcg", "贝恩", "bain"];
-    
-    if (tier1.some(t => locationLower.includes(t.toLowerCase()))) {
-      return <Badge variant="outline" className="ml-2 text-xs bg-emerald-50 text-emerald-700 border-emerald-200"><Shield className="w-3 h-3 mr-1" />Tier 1 券商</Badge>;
-    }
-    if (tier2.some(t => locationLower.includes(t))) {
-      return <Badge variant="outline" className="ml-2 text-xs bg-blue-50 text-blue-700 border-blue-200"><Shield className="w-3 h-3 mr-1" />Tier 2 投行</Badge>;
-    }
-    if (tier3.some(t => locationLower.includes(t))) {
-      return <Badge variant="outline" className="ml-2 text-xs bg-violet-50 text-violet-700 border-violet-200"><Shield className="w-3 h-3 mr-1" />Tier 3 咨询</Badge>;
-    }
-    return null;
   };
 
   const getPdfStatusIcon = (status: PdfFile["status"]) => {
@@ -434,6 +427,25 @@ export default function Home() {
 
                 <Separator className="my-6" />
 
+                {/* Industry Input - NEW */}
+                <div className="space-y-3 mb-6">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-muted-foreground" />
+                    <Label htmlFor="industry">Industry Name</Label>
+                  </div>
+                  <Input
+                    id="industry"
+                    placeholder="e.g., 现制咖啡, 新能源汽车, 医美"
+                    value={industry}
+                    onChange={(e) => setIndustry(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Enter the industry to filter relevant sources (required for web search)
+                  </p>
+                </div>
+
+                <Separator className="my-6" />
+
                 <div className="space-y-4">
                   <Label>Framework Selection</Label>
                   <Select value={framework} onValueChange={(v) => setFramework(v as Framework)}>
@@ -472,12 +484,9 @@ export default function Home() {
                     onCheckedChange={setWebSearchEnabled}
                   />
                 </div>
-                {webSearchEnabled && (
-                  <div className="mt-3 p-3 bg-cyan-50 border border-cyan-200 rounded-lg text-xs text-cyan-800">
-                    <div className="font-medium mb-1">Priority Sources:</div>
-                    <div>1. 国内券商 (广发/天风/中信/招商/华泰)</div>
-                    <div>2. 国外投行 (MS/GS/JPM)</div>
-                    <div>3. 咨询机构 (艾瑞/灼识/德勤/MBB)</div>
+                {webSearchEnabled && !industry.trim() && (
+                  <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+                    Please enter the industry name above to enable web search
                   </div>
                 )}
               </CardContent>
@@ -621,7 +630,7 @@ export default function Home() {
                 className="w-full" 
                 size="lg"
                 onClick={handleGenerate}
-                disabled={!chartImage || isGenerating || pdfFiles.some(p => p.status === "extracting")}
+                disabled={!chartImage || isGenerating || pdfFiles.some(p => p.status === "extracting") || (webSearchEnabled && !industry.trim())}
               >
                 {isGenerating ? (
                   <>
@@ -734,7 +743,6 @@ export default function Home() {
                                 <span className={`text-xs px-2 py-0.5 rounded-full border ${getSourceBadgeColor(source.type)}`}>
                                   {source.type}
                                 </span>
-                                {getSourceTierBadge(source.type, source.location)}
                                 <span className="text-xs text-muted-foreground">{source.location}</span>
                               </div>
                               {source.url && isValidUrl(source.url) && (
@@ -765,10 +773,16 @@ export default function Home() {
             <div className="flex items-center justify-between">
               <div className="text-sm text-muted-foreground">
                 <span className="font-medium">Format:</span> {framework === "breakdown" ? "By Segment" : framework === "time" ? "By Time" : "Hybrid"}
+                {industry && (
+                  <span className="ml-2">
+                    <Building2 className="w-3 h-3 inline mr-1" />
+                    {industry}
+                  </span>
+                )}
                 {webSearchEnabled && (
                   <span className="ml-2">
                     <Globe className="w-3 h-3 inline mr-1" />
-                    Web Search Enabled
+                    Web Search
                   </span>
                 )}
               </div>

@@ -60,3 +60,17 @@
 - [x] Implement source validation mechanism with authority ranking
 - [x] Exclude low-quality sources (纯目录、新闻稿、财报、摘要、营销文档)
 - [x] Quality standards: >200KB, >15页, 2023年后, 包含数据图表
+
+## v1.7 Iteration - User Feedback Fixes
+
+### Source relevance issue
+- [x] Add industry input field for manual entry
+- [x] Filter web search sources by industry relevance
+- [x] Validate that cited sources match the specified industry
+
+### Format issue
+- [x] Remove "Tier 1/2/3" badges from citation display
+
+### Pattern-level issues
+- [x] Avoid full timeline wording ('19-'30E spanning entire period - useless)
+- [x] Fix semicolon usage: if L1 bullet has sub-bullets, write L1 as one complete sentence without semicolons

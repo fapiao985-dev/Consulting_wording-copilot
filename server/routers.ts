@@ -14,15 +14,15 @@ const AUTHORITY_SOURCES = {
   tier4_research: ["华经情报网", "共研网", "智研咨询", "观研报告网", "中国报告网", "Euromonitor", "Statista", "IBISWorld"]
 };
 
-// Bain-style wording prompt - updated with v1.6 fixes
+// Bain-style wording prompt - updated with v1.7 fixes
 const BAIN_WORDING_SYSTEM_PROMPT = `You are a senior Bain & Company consultant. Generate slide wording in EXACT Bain style.
 
 CRITICAL GRAMMAR RULES (BAIN STYLE):
 1. NO PERIODS at the end of sentences - sentences end without punctuation
 2. OMIT verbs like "is", "are", "has been" where natural - use sentence fragments
 3. Use colons (:) to introduce explanations
-4. Use semicolons (;) to separate related ideas within a bullet
-5. DO NOT use asterisks (**) for bold - output plain text only
+4. DO NOT use asterisks (**) for bold - output plain text only
+5. SEMICOLON RULE: If a main bullet (•) has sub-bullets (–), the main bullet should be ONE COMPLETE SENTENCE without semicolons. Only use semicolons when there are NO sub-bullets.
 
 CRITICAL FORMAT REQUIREMENTS:
 1. Output ONLY the "Highlights" section content
@@ -36,36 +36,42 @@ TIME FORMAT (BAIN STANDARD):
 - Use abbreviated years: '19, '24, '30E
 - Use ranges: '19-'24, '24-'30E
 - Use L5Y (last 5 years), NTM (next twelve months)
+- NEVER use full timeline ranges like '19-'30E - this is useless and spans entire period
+
+CRITICAL TIME RANGE RULE:
+- AVOID spanning the entire timeline (e.g., '19-'30E) - this provides no insight
+- ALWAYS separate historical ('19-'24) and future ('24-'30E) periods
+- Each time reference should be specific and meaningful
 
 TWO SENTENCE STRUCTURE PATTERNS:
 
 Pattern A - Category as L1 (use when organizing by segment):
-• [Category Name]: [brief trend + reason in one phrase]
+• [Category Name]: [brief trend + reason in one complete phrase without semicolons]
   – [Supporting detail or evidence]
   – [Another supporting detail]
 
-Example:
-• High-grade: Outgrowing overall market driven by super-high grade new product launches; ASP uplift from premiumization
+CORRECT Example:
+• High-grade: Outgrowing overall market driven by super-high grade new product launches and ASP uplift from premiumization
   – New UMF20+ products commanding price premium, attracting health-conscious consumers
   – Brand investment in high-grade positioning paying off with improved mix
 
-Pattern B - Trend as L1 (use when highlighting market dynamics):
-• [Market trend statement with key insight]
-  – [Supporting reason or evidence]
+WRONG Example (DO NOT USE semicolons when sub-bullets exist):
+• High-grade: Outgrowing overall market driven by super-high grade new product launches; ASP uplift from premiumization
+  – New UMF20+ products commanding price premium
 
-Example:
-• Overall market recovering post-inventory correction, with '24-'30E growth accelerating vs '19-'24
-  – Low-grade inventory overhang largely cleared by end of '24
-  – Price war subsiding as supply-demand rebalances
+Pattern B - Trend as L1 (use when highlighting market dynamics):
+• [Market trend statement with key insight - one complete sentence]
+  – [Supporting reason or evidence]
 
 CRITICAL CONTENT RULES:
 - DO NOT say "value growth" - the chart already shows market value, this is redundant
 - DO NOT repeat ANY numbers from the chart (CAGR, market size, percentages)
 - DO NOT define segments (the chart already shows segment definitions)
+- DO NOT use full timeline ranges like '19-'30E - always separate historical vs future
 - FOCUS on explaining WHY, not WHAT
-- MUST cover BOTH historical trends AND future outlook
-- If drivers are SAME for historical and future, combine them
-- If drivers are DIFFERENT, separate historical vs future clearly
+- MUST cover BOTH historical trends AND future outlook SEPARATELY
+- If drivers are SAME for historical and future, mention both periods but combine the driver
+- If drivers are DIFFERENT, clearly separate historical vs future
 - Include specific examples where relevant (company names, regions, time periods)
 - MUST use insights from the provided research reports - do not rely on general knowledge
 
@@ -85,12 +91,6 @@ CRITICAL RULES:
 4. Be specific about WHERE in each source the information comes from
 5. Quote the exact text from the source when possible
 6. For Web sources, MUST include the URL if available
-
-SOURCE AUTHORITY RANKING (cite higher priority sources first):
-Priority 1 - 国内头部券商: 广发证券, 天风证券, 国金证券, 中信证券, 招商证券, 华泰证券, 国海证券, 东方证券
-Priority 2 - 国外顶级投行: Morgan Stanley, Goldman Sachs, JP Morgan, Bank of America, Credit Suisse
-Priority 3 - 知名咨询机构: 艾瑞咨询, 灼识咨询, 久谦咨询, 艺恩咨询, 德勤, 麦肯锡, BCG, 贝恩
-Priority 4 - 行业研究机构: 华经情报网, 共研网, 智研咨询, 观研报告网, Euromonitor, Statista
 
 EXCLUDE these source types:
 - 纯目录型报告 (table of contents only)
@@ -146,15 +146,17 @@ Focus on extracting:
 Format your extraction as structured notes with clear section headers.
 Quote exact text when it contains important data or insights.`;
 
-// Web search prompt - updated with authority source requirements
-const WEB_SEARCH_PROMPT = `You are a research analyst. Based on the market context provided, generate 3-5 specific search queries to find authoritative market data and insights.
+// Web search prompt - updated with industry filtering
+const getWebSearchPrompt = (industry: string) => `You are a research analyst. Based on the market context provided, generate 3-5 specific search queries to find authoritative market data and insights.
+
+CRITICAL: You are researching the "${industry}" industry. ALL search queries and results MUST be specifically about "${industry}".
 
 SEARCH STRATEGY:
 Use Chinese searches with PDF file type filter:
-- [行业名称] 深度报告 PDF
-- [行业名称] 行业白皮书 PDF
-- [行业名称] 竞争格局 PDF
-- [行业名称] 发展趋势 2024 2025 PDF
+- ${industry} 深度报告 PDF
+- ${industry} 行业白皮书 PDF
+- ${industry} 竞争格局 PDF
+- ${industry} 发展趋势 2024 2025 PDF
 
 PRIORITY SOURCES TO TARGET:
 1. 国内头部券商: 广发证券, 天风证券, 国金证券, 中信证券, 招商证券, 华泰证券
@@ -176,6 +178,7 @@ EXCLUDE:
 - 上市公司原始财报
 - 简报或摘要版本
 - 营销宣传类文档
+- Reports about OTHER industries (not "${industry}")
 
 Return queries as a JSON array of strings.`;
 
@@ -223,34 +226,6 @@ async function extractPdfPageWithVision(pageImageBase64: string, pageNum: number
     console.error(`Vision extraction error for page ${pageNum}:`, error);
     return '';
   }
-}
-
-// Helper function to validate source authority
-function validateSourceAuthority(sourceName: string): { isValid: boolean; tier: number; tierName: string } {
-  const lowerName = sourceName.toLowerCase();
-  
-  for (const source of AUTHORITY_SOURCES.tier1_domestic) {
-    if (lowerName.includes(source.toLowerCase())) {
-      return { isValid: true, tier: 1, tierName: "国内头部券商" };
-    }
-  }
-  for (const source of AUTHORITY_SOURCES.tier2_foreign) {
-    if (lowerName.includes(source.toLowerCase())) {
-      return { isValid: true, tier: 2, tierName: "国外顶级投行" };
-    }
-  }
-  for (const source of AUTHORITY_SOURCES.tier3_consulting) {
-    if (lowerName.includes(source.toLowerCase())) {
-      return { isValid: true, tier: 3, tierName: "知名咨询机构" };
-    }
-  }
-  for (const source of AUTHORITY_SOURCES.tier4_research) {
-    if (lowerName.includes(source.toLowerCase())) {
-      return { isValid: true, tier: 4, tierName: "行业研究机构" };
-    }
-  }
-  
-  return { isValid: false, tier: 99, tierName: "未验证来源" };
 }
 
 export const appRouter = router({
@@ -343,21 +318,22 @@ export const appRouter = router({
         }
       }),
 
-    // Web search for additional market data - with authority validation
+    // Web search for additional market data - with industry filtering
     webSearch: publicProcedure
       .input(z.object({
         marketContext: z.string(),
         chartDescription: z.string().optional(),
+        industry: z.string(), // Required industry field for filtering
       }))
       .mutation(async ({ input }) => {
         try {
-          // Generate search queries based on context
+          // Generate search queries based on context with industry filtering
           const queryResponse = await invokeLLM({
             messages: [
-              { role: "system", content: WEB_SEARCH_PROMPT },
+              { role: "system", content: getWebSearchPrompt(input.industry) },
               { 
                 role: "user", 
-                content: `Market context: ${input.marketContext}\n\nChart description: ${input.chartDescription || "Not provided"}\n\nGenerate 3-5 specific search queries to find authoritative market data from trusted sources (券商研报, consulting firms, industry research).`
+                content: `Industry: ${input.industry}\n\nMarket context: ${input.marketContext}\n\nChart description: ${input.chartDescription || "Not provided"}\n\nGenerate 3-5 specific search queries to find authoritative market data about "${input.industry}" from trusted sources (券商研报, consulting firms, industry research). ALL queries must be specifically about "${input.industry}".`
               }
             ],
             response_format: {
@@ -387,12 +363,14 @@ export const appRouter = router({
             queries = parsed.queries || [];
           }
 
-          // Generate search results with URLs and authority validation
+          // Generate search results with URLs and industry validation
           const searchResponse = await invokeLLM({
             messages: [
               { 
                 role: "system", 
                 content: `You are a market research assistant. Based on the search queries, provide authoritative market insights.
+
+CRITICAL: You are researching the "${input.industry}" industry. ALL findings MUST be specifically about "${input.industry}". Do NOT include reports about other industries.
 
 CRITICAL REQUIREMENTS:
 1. ONLY cite from these authoritative sources:
@@ -406,26 +384,27 @@ CRITICAL REQUIREMENTS:
    - Publication date (must be 2023 or later)
    - Specific URL (realistic format)
    - Key data point or insight
-   - Relevance to market analysis
+   - Relevance to "${input.industry}" market analysis
 
 3. EXCLUDE:
    - News articles
    - Company press releases
    - Generic industry overviews
    - Sources not in the authority list
+   - Reports about OTHER industries (not "${input.industry}")
 
 4. VALIDATE relevance:
-   - Each finding must be directly relevant to the market being analyzed
+   - Each finding must be directly relevant to "${input.industry}"
    - Do not include findings from unrelated industries
 
 Format each finding as:
 [Source Name] (Date) - URL
-Key insight: [specific data or trend]
-Relevance: [why this matters for the analysis]`
+Key insight: [specific data or trend about ${input.industry}]
+Relevance: [why this matters for ${input.industry} analysis]`
               },
               { 
                 role: "user", 
-                content: `Search queries:\n${queries.join("\n")}\n\nMarket context: ${input.marketContext}\n\nProvide 5-8 key findings from authoritative sources. Each finding MUST include a realistic URL.`
+                content: `Industry: ${input.industry}\n\nSearch queries:\n${queries.join("\n")}\n\nMarket context: ${input.marketContext}\n\nProvide 5-8 key findings from authoritative sources about "${input.industry}". Each finding MUST include a realistic URL and MUST be specifically about "${input.industry}".`
               }
             ]
           });
@@ -441,7 +420,7 @@ Relevance: [why this matters for the analysis]`
         }
       }),
 
-    // Generate wording with source citations - v1.6 updated
+    // Generate wording with source citations - v1.7 updated
     generateWording: publicProcedure
       .input(z.object({
         chartImage: z.string(),
@@ -455,6 +434,7 @@ Relevance: [why this matters for the analysis]`
         framework: z.enum(["breakdown", "time", "hybrid"]),
         webSearchEnabled: z.boolean().optional(),
         webSearchResults: z.string().optional(),
+        industry: z.string().optional(), // Optional industry for source validation
       }))
       .mutation(async ({ input }) => {
         // Build context from all inputs with clear labels
@@ -488,22 +468,25 @@ Relevance: [why this matters for the analysis]`
 
         const frameworkInstruction = input.framework === "breakdown" 
           ? `Organize by SEGMENT using Pattern A:
-• [Segment Name]: [trend + reason]
+• [Segment Name]: [trend + reason in ONE complete sentence, NO semicolons]
   – [Supporting detail]
 Each main bullet focuses on one segment (e.g., High-grade, Low-grade). Explain why each segment growing fast/slow.
-MUST cover BOTH historical ('19-'24) AND future ('24-'30E) trends. Combine if drivers are same, separate if different.`
+MUST cover BOTH historical ('19-'24) AND future ('24-'30E) trends SEPARATELY - never use '19-'30E.
+IMPORTANT: Since you have sub-bullets, the main bullet should be ONE complete sentence WITHOUT semicolons.`
           : input.framework === "time"
           ? `Organize by TIME PERIOD:
-• '19-'24: [what happened + why]
+• '19-'24: [what happened + why in ONE complete sentence]
   – [Supporting detail]
-• '24-'30E: [outlook + drivers]
+• '24-'30E: [outlook + drivers in ONE complete sentence]
   – [Supporting detail]
-Each main bullet focuses on one time period. Explain what drove growth in each period.`
+Each main bullet focuses on one time period. Explain what drove growth in each period.
+IMPORTANT: Since you have sub-bullets, the main bullet should be ONE complete sentence WITHOUT semicolons.`
           : `Organize by SEGMENT × TIME:
-• [Segment Name]: [overall trend]
+• [Segment Name]: [overall trend in ONE complete sentence]
   – '19-'24: [historical trend + reason]
   – '24-'30E: [future outlook + drivers]
-Each main bullet focuses on one segment, with sub-bullets showing its evolution over time.`;
+Each main bullet focuses on one segment, with sub-bullets showing its evolution over time.
+IMPORTANT: Since you have sub-bullets, the main bullet should be ONE complete sentence WITHOUT semicolons.`;
 
         // Step 1: Generate wording
         const wordingMessages: Array<{ role: "system" | "user" | "assistant"; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> }> = [
@@ -540,9 +523,11 @@ Generate the Bain-style "Highlights" wording now. Remember:
 - DO NOT repeat chart numbers
 - DO NOT say "value growth" - redundant with chart
 - Use Bain time format: '19, '24, '19-'24, '24-'30E
+- NEVER use full timeline like '19-'30E - always separate historical vs future
 - NO BOLD MARKERS (no ** symbols) - plain text only
+- NO SEMICOLONS in main bullets when sub-bullets exist - write one complete sentence
 - Focus on WHY, not WHAT
-- Cover BOTH historical AND future trends
+- Cover BOTH historical AND future trends SEPARATELY
 - BASE YOUR ANALYSIS ON THE PROVIDED RESEARCH MATERIALS`
         });
 
@@ -561,15 +546,15 @@ Generate the Bain-style "Highlights" wording now. Remember:
           wording = wording.replace(/\.(\s*)$/g, '$1');
         } catch (error) {
           console.error("Wording generation error:", error);
-          wording = `• High-grade: Outgrowing overall market driven by super-high grade new product launches; ASP uplift from premiumization
-  – New UMF20+ products commanding price premium, attracting health-conscious consumers
-  – Brand investment in high-grade positioning paying off with improved mix
+          wording = `• High-grade: Outgrowing overall market driven by super-high grade new product launches and ASP uplift from premiumization
+  – New UMF20+ products commanding price premium, attracting health-conscious consumers in '19-'24
+  – Brand investment in high-grade positioning expected to continue through '24-'30E
 
-• Low-grade: Recovery post-inventory correction, with '24-'30E growth accelerating vs '19-'24
+• Low-grade: Recovery post-inventory correction with growth accelerating in '24-'30E vs '19-'24
   – Inventory overhang largely cleared by end of '24 per boss feedback
   – Price war subsiding as supply-demand rebalances
 
-• Other products: Steady growth maintaining market share
+• Other products: Steady growth maintaining market share across both periods
   – Diversification into adjacent categories providing stability
   – Lower volatility vs core honey segments`;
         }
@@ -585,12 +570,14 @@ Generate the Bain-style "Highlights" wording now. Remember:
           }>;
         }> = [];
 
+        const industryContext = input.industry ? `\n\nINDUSTRY CONTEXT: The analysis is about "${input.industry}". Only cite sources that are relevant to this industry.` : '';
+
         try {
           const citationMessages: Array<{ role: "system" | "user"; content: string }> = [
             { role: "system", content: SOURCE_CITATION_PROMPT },
             { 
               role: "user", 
-              content: `Here is the generated wording:\n\n${wording}\n\n---\n\nHere are ALL the sources that were provided (you MUST cite from these):\n\n${contextParts.join("\n\n---\n\n")}\n\n---\n\nAvailable source types: ${availableSources.join(", ")}\n\nFor each bullet point in the wording, identify which source(s) it came from. 
+              content: `Here is the generated wording:\n\n${wording}\n\n---\n\nHere are ALL the sources that were provided (you MUST cite from these):\n\n${contextParts.join("\n\n---\n\n")}\n\n---\n\nAvailable source types: ${availableSources.join(", ")}${industryContext}\n\nFor each bullet point in the wording, identify which source(s) it came from. 
               
 CRITICAL: 
 - You MUST cite from the provided sources above
