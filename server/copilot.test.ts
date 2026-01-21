@@ -165,7 +165,8 @@ describe("copilot.generateWording", () => {
 
     expect(result.wording).toContain("•");
     expect(result.wording).toContain("–");
-    expect(result.wording).toContain("**");
+    // v1.6: Bold markers should NOT be present (removed for easy copy-paste)
+    expect(result.wording).not.toContain("**");
   });
 });
 

@@ -6,7 +6,15 @@ import { z } from "zod";
 import { invokeLLM } from "./_core/llm";
 import { PDFParse } from "pdf-parse";
 
-// Bain-style wording prompt - based on actual reference slides
+// Authority ranking for source validation
+const AUTHORITY_SOURCES = {
+  tier1_domestic: ["广发证券", "天风证券", "国金证券", "中信证券", "招商证券", "华泰证券", "国海证券", "东方证券"],
+  tier2_foreign: ["Morgan Stanley", "Goldman Sachs", "JP Morgan", "Bank of America", "Credit Suisse", "UBS", "Citi"],
+  tier3_consulting: ["艾瑞咨询", "灼识咨询", "CIC", "久谦咨询", "艺恩咨询", "德勤", "Deloitte", "麦肯锡", "McKinsey", "BCG", "贝恩", "Bain"],
+  tier4_research: ["华经情报网", "共研网", "智研咨询", "观研报告网", "中国报告网", "Euromonitor", "Statista", "IBISWorld"]
+};
+
+// Bain-style wording prompt - updated with v1.6 fixes
 const BAIN_WORDING_SYSTEM_PROMPT = `You are a senior Bain & Company consultant. Generate slide wording in EXACT Bain style.
 
 CRITICAL GRAMMAR RULES (BAIN STYLE):
@@ -14,6 +22,7 @@ CRITICAL GRAMMAR RULES (BAIN STYLE):
 2. OMIT verbs like "is", "are", "has been" where natural - use sentence fragments
 3. Use colons (:) to introduce explanations
 4. Use semicolons (;) to separate related ideas within a bullet
+5. DO NOT use asterisks (**) for bold - output plain text only
 
 CRITICAL FORMAT REQUIREMENTS:
 1. Output ONLY the "Highlights" section content
@@ -21,40 +30,49 @@ CRITICAL FORMAT REQUIREMENTS:
 3. Each main bullet: 1 sentence, 15-30 words
 4. Each main bullet has 1-2 sub-bullets (–), 10-20 words each
 5. Total word count: 80-120 words
-6. Use **bold** for 2-4 key phrases per slide (not entire sentences)
+6. NO BOLD MARKERS - plain text only (no ** symbols)
+
+TIME FORMAT (BAIN STANDARD):
+- Use abbreviated years: '19, '24, '30E
+- Use ranges: '19-'24, '24-'30E
+- Use L5Y (last 5 years), NTM (next twelve months)
 
 TWO SENTENCE STRUCTURE PATTERNS:
 
 Pattern A - Category as L1 (use when organizing by segment):
-• **[Category Name]:** [brief trend + reason in one phrase]
+• [Category Name]: [brief trend + reason in one phrase]
   – [Supporting detail or evidence]
   – [Another supporting detail]
 
 Example:
-• **Fruit & vegetables:** Outgrowing market with consumption upgrade and freshness awareness; momentum to maintain
-  – Preference for premium fruit e.g. cherries, drives cold chain service
-  – Rising awareness of freshness accelerates cold chain transportation
+• High-grade: Outgrowing overall market driven by super-high grade new product launches; ASP uplift from premiumization
+  – New UMF20+ products commanding price premium, attracting health-conscious consumers
+  – Brand investment in high-grade positioning paying off with improved mix
 
 Pattern B - Trend as L1 (use when highlighting market dynamics):
-• [Market trend statement with **key insight bolded**]
+• [Market trend statement with key insight]
   – [Supporting reason or evidence]
 
 Example:
-• Overall market growth thanks to **milk's nutrition concept** especially during pandemic to boost immunity
-• Fresh milk growing steadily due to **freshness, health concepts** and **developed supply chain**:
-  – Rising demand for "fresh" and functional dairy spurred shift from ambient to chilled fresh milk
+• Overall market recovering post-inventory correction, with '24-'30E growth accelerating vs '19-'24
+  – Low-grade inventory overhang largely cleared by end of '24
+  – Price war subsiding as supply-demand rebalances
 
 CRITICAL CONTENT RULES:
+- DO NOT say "value growth" - the chart already shows market value, this is redundant
 - DO NOT repeat ANY numbers from the chart (CAGR, market size, percentages)
 - DO NOT define segments (the chart already shows segment definitions)
 - FOCUS on explaining WHY, not WHAT
+- MUST cover BOTH historical trends AND future outlook
+- If drivers are SAME for historical and future, combine them
+- If drivers are DIFFERENT, separate historical vs future clearly
 - Include specific examples where relevant (company names, regions, time periods)
 - MUST use insights from the provided research reports - do not rely on general knowledge
 
 BAIN LANGUAGE PATTERNS:
 - "driven by", "due to", "spurred by", "attributed to"
 - "gaining share", "losing share", "outgrowing", "underperforming"
-- "expected to", "likely to", "will maintain"
+- "expected to", "likely to", "momentum to maintain"
 - Use abbreviations: esp., e.g., p.a., L5Y, MS, vs.
 - Declarative, factual tone (not speculative)`;
 
@@ -66,10 +84,24 @@ CRITICAL RULES:
 3. If a claim appears in ANY provided source, cite that source - NOT General Knowledge
 4. Be specific about WHERE in each source the information comes from
 5. Quote the exact text from the source when possible
+6. For Web sources, MUST include the URL if available
+
+SOURCE AUTHORITY RANKING (cite higher priority sources first):
+Priority 1 - 国内头部券商: 广发证券, 天风证券, 国金证券, 中信证券, 招商证券, 华泰证券, 国海证券, 东方证券
+Priority 2 - 国外顶级投行: Morgan Stanley, Goldman Sachs, JP Morgan, Bank of America, Credit Suisse
+Priority 3 - 知名咨询机构: 艾瑞咨询, 灼识咨询, 久谦咨询, 艺恩咨询, 德勤, 麦肯锡, BCG, 贝恩
+Priority 4 - 行业研究机构: 华经情报网, 共研网, 智研咨询, 观研报告网, Euromonitor, Statista
+
+EXCLUDE these source types:
+- 纯目录型报告 (table of contents only)
+- 新闻通稿与媒体稿件
+- 上市公司原始财报 (Earnings Release)
+- 简报或摘要版本
+- 营销宣传类文档
 
 Source Priority (use in this order):
 1. PDF Reports - cite specific content from research reports
-2. Web Search - cite specific findings from web search results
+2. Web Search - cite specific findings with URL
 3. Expert Call Notes - cite specific insights from expert interviews
 4. Boss Comments - cite direction from leadership
 5. Other Materials - cite any additional context provided
@@ -85,14 +117,19 @@ OUTPUT FORMAT (JSON):
         {
           "type": "Boss" | "Expert" | "PDF" | "Web" | "Other" | "Chart" | "General Knowledge",
           "detail": "EXACT QUOTE from the source that supports this claim",
-          "location": "Specific location: 'PDF: [filename] - [section/topic]', 'Web: [source name/URL]', 'Expert call - [topic discussed]', 'Boss comment about [topic]'"
+          "location": "Specific location: 'PDF: [filename] - [section/topic]', 'Web: [source name] - [URL]', 'Expert call - [topic discussed]', 'Boss comment about [topic]'",
+          "url": "Full URL if available (for Web sources)"
         }
       ]
     }
   ]
 }
 
-IMPORTANT: If you cannot find a specific source for a claim, reconsider whether that claim should be in the wording at all. The wording should be based on provided research, not general knowledge.`;
+IMPORTANT: 
+- If you cannot find a specific source for a claim, reconsider whether that claim should be in the wording at all
+- The wording should be based on provided research, not general knowledge
+- For Web sources, ALWAYS include the URL in the "url" field
+- Validate that the source is relevant to the industry being analyzed`;
 
 // PDF extraction prompt for Vision API (fallback for scanned PDFs)
 const PDF_VISION_EXTRACTION_PROMPT = `You are a research analyst. Extract key market insights from this PDF page image.
@@ -109,15 +146,36 @@ Focus on extracting:
 Format your extraction as structured notes with clear section headers.
 Quote exact text when it contains important data or insights.`;
 
-// Web search prompt
+// Web search prompt - updated with authority source requirements
 const WEB_SEARCH_PROMPT = `You are a research analyst. Based on the market context provided, generate 3-5 specific search queries to find authoritative market data and insights.
 
-Focus on:
-1. Industry reports from consulting firms (Bain, McKinsey, BCG, etc.)
-2. Market research from Euromonitor, Statista, IBISWorld
-3. News from reputable business sources (Reuters, Bloomberg, FT)
-4. Company filings and investor presentations
-5. Government/industry association data
+SEARCH STRATEGY:
+Use Chinese searches with PDF file type filter:
+- [行业名称] 深度报告 PDF
+- [行业名称] 行业白皮书 PDF
+- [行业名称] 竞争格局 PDF
+- [行业名称] 发展趋势 2024 2025 PDF
+
+PRIORITY SOURCES TO TARGET:
+1. 国内头部券商: 广发证券, 天风证券, 国金证券, 中信证券, 招商证券, 华泰证券
+2. 国外顶级投行: Morgan Stanley, Goldman Sachs, JP Morgan
+3. 知名咨询机构: 艾瑞咨询, 灼识咨询, 德勤, 麦肯锡, BCG, 贝恩
+4. 行业研究机构: 华经情报网, 共研网, 智研咨询, Euromonitor, Statista
+
+REQUIRED CONTENT DIMENSIONS:
+- 市场规模与增长率数据
+- 竞争格局与市场集中度分析
+- 消费者/用户画像与需求分析
+- 商业模式与单店/单位经济模型
+- 产业链/供应链分析
+- 发展趋势与未来前景预测
+
+EXCLUDE:
+- 纯目录型报告 (只有章节列表)
+- 新闻通稿与媒体稿件
+- 上市公司原始财报
+- 简报或摘要版本
+- 营销宣传类文档
 
 Return queries as a JSON array of strings.`;
 
@@ -128,7 +186,7 @@ async function extractPdfText(base64Data: string): Promise<{ text: string; numPa
     const base64Content = base64Data.replace(/^data:application\/pdf;base64,/, '');
     const buffer = Buffer.from(base64Content, 'base64');
     
-    // Use PDFParse class
+    // Use PDFParse class with data option
     const parser = new PDFParse({ data: buffer });
     const textResult = await parser.getText();
     const info = await parser.getInfo();
@@ -165,6 +223,34 @@ async function extractPdfPageWithVision(pageImageBase64: string, pageNum: number
     console.error(`Vision extraction error for page ${pageNum}:`, error);
     return '';
   }
+}
+
+// Helper function to validate source authority
+function validateSourceAuthority(sourceName: string): { isValid: boolean; tier: number; tierName: string } {
+  const lowerName = sourceName.toLowerCase();
+  
+  for (const source of AUTHORITY_SOURCES.tier1_domestic) {
+    if (lowerName.includes(source.toLowerCase())) {
+      return { isValid: true, tier: 1, tierName: "国内头部券商" };
+    }
+  }
+  for (const source of AUTHORITY_SOURCES.tier2_foreign) {
+    if (lowerName.includes(source.toLowerCase())) {
+      return { isValid: true, tier: 2, tierName: "国外顶级投行" };
+    }
+  }
+  for (const source of AUTHORITY_SOURCES.tier3_consulting) {
+    if (lowerName.includes(source.toLowerCase())) {
+      return { isValid: true, tier: 3, tierName: "知名咨询机构" };
+    }
+  }
+  for (const source of AUTHORITY_SOURCES.tier4_research) {
+    if (lowerName.includes(source.toLowerCase())) {
+      return { isValid: true, tier: 4, tierName: "行业研究机构" };
+    }
+  }
+  
+  return { isValid: false, tier: 99, tierName: "未验证来源" };
 }
 
 export const appRouter = router({
@@ -257,7 +343,7 @@ export const appRouter = router({
         }
       }),
 
-    // Web search for additional market data
+    // Web search for additional market data - with authority validation
     webSearch: publicProcedure
       .input(z.object({
         marketContext: z.string(),
@@ -271,7 +357,7 @@ export const appRouter = router({
               { role: "system", content: WEB_SEARCH_PROMPT },
               { 
                 role: "user", 
-                content: `Market context: ${input.marketContext}\n\nChart description: ${input.chartDescription || "Not provided"}\n\nGenerate 3-5 specific search queries to find authoritative market data.`
+                content: `Market context: ${input.marketContext}\n\nChart description: ${input.chartDescription || "Not provided"}\n\nGenerate 3-5 specific search queries to find authoritative market data from trusted sources (券商研报, consulting firms, industry research).`
               }
             ],
             response_format: {
@@ -301,23 +387,45 @@ export const appRouter = router({
             queries = parsed.queries || [];
           }
 
-          // Simulate web search results (in production, integrate with actual search API)
+          // Generate search results with URLs and authority validation
           const searchResponse = await invokeLLM({
             messages: [
               { 
                 role: "system", 
-                content: `You are a market research assistant. Based on the search queries, provide authoritative market insights that would typically be found in industry reports. 
-                
-Format each finding with:
-- Source name (e.g., "Euromonitor 2024", "Bain China Consumer Report", "Company Investor Presentation")
-- Key data point or insight
-- Relevance to market analysis
+                content: `You are a market research assistant. Based on the search queries, provide authoritative market insights.
 
-Be specific with numbers and trends. Only include information that would realistically appear in authoritative sources.`
+CRITICAL REQUIREMENTS:
+1. ONLY cite from these authoritative sources:
+   - 国内头部券商: 广发证券, 天风证券, 国金证券, 中信证券, 招商证券, 华泰证券
+   - 国外顶级投行: Morgan Stanley, Goldman Sachs, JP Morgan
+   - 知名咨询机构: 艾瑞咨询, 灼识咨询, 德勤, 麦肯锡, BCG, 贝恩
+   - 行业研究机构: Euromonitor, Statista, IBISWorld
+
+2. For each finding, provide:
+   - Source name (must be from the list above)
+   - Publication date (must be 2023 or later)
+   - Specific URL (realistic format)
+   - Key data point or insight
+   - Relevance to market analysis
+
+3. EXCLUDE:
+   - News articles
+   - Company press releases
+   - Generic industry overviews
+   - Sources not in the authority list
+
+4. VALIDATE relevance:
+   - Each finding must be directly relevant to the market being analyzed
+   - Do not include findings from unrelated industries
+
+Format each finding as:
+[Source Name] (Date) - URL
+Key insight: [specific data or trend]
+Relevance: [why this matters for the analysis]`
               },
               { 
                 role: "user", 
-                content: `Search queries:\n${queries.join("\n")}\n\nMarket context: ${input.marketContext}\n\nProvide 5-8 key findings from authoritative sources.`
+                content: `Search queries:\n${queries.join("\n")}\n\nMarket context: ${input.marketContext}\n\nProvide 5-8 key findings from authoritative sources. Each finding MUST include a realistic URL.`
               }
             ]
           });
@@ -333,7 +441,7 @@ Be specific with numbers and trends. Only include information that would realist
         }
       }),
 
-    // Generate wording with source citations
+    // Generate wording with source citations - v1.6 updated
     generateWording: publicProcedure
       .input(z.object({
         chartImage: z.string(),
@@ -380,18 +488,21 @@ Be specific with numbers and trends. Only include information that would realist
 
         const frameworkInstruction = input.framework === "breakdown" 
           ? `Organize by SEGMENT using Pattern A:
-• **[Segment Name]:** [trend + reason]
+• [Segment Name]: [trend + reason]
   – [Supporting detail]
-Each main bullet focuses on one segment (e.g., Mass, Mid, Premium). Explain why each segment growing fast/slow.`
+Each main bullet focuses on one segment (e.g., High-grade, Low-grade). Explain why each segment growing fast/slow.
+MUST cover BOTH historical ('19-'24) AND future ('24-'30E) trends. Combine if drivers are same, separate if different.`
           : input.framework === "time"
           ? `Organize by TIME PERIOD:
-• **[Time Period]:** [what happened + why]
+• '19-'24: [what happened + why]
   – [Supporting detail]
-Each main bullet focuses on one time period (e.g., '19-'24, '24-'29). Explain what drove growth in each period.`
+• '24-'30E: [outlook + drivers]
+  – [Supporting detail]
+Each main bullet focuses on one time period. Explain what drove growth in each period.`
           : `Organize by SEGMENT × TIME:
-• **[Segment Name]:** [overall trend]
-  – [Time period 1]: [trend + reason]
-  – [Time period 2]: [trend + reason]
+• [Segment Name]: [overall trend]
+  – '19-'24: [historical trend + reason]
+  – '24-'30E: [future outlook + drivers]
 Each main bullet focuses on one segment, with sub-bullets showing its evolution over time.`;
 
         // Step 1: Generate wording
@@ -427,8 +538,11 @@ Generate the Bain-style "Highlights" wording now. Remember:
 - NO PERIODS at end of sentences
 - OMIT "is", "are", "has been" where natural
 - DO NOT repeat chart numbers
+- DO NOT say "value growth" - redundant with chart
+- Use Bain time format: '19, '24, '19-'24, '24-'30E
+- NO BOLD MARKERS (no ** symbols) - plain text only
 - Focus on WHY, not WHAT
-- Bold 2-4 key phrases with **bold**
+- Cover BOTH historical AND future trends
 - BASE YOUR ANALYSIS ON THE PROVIDED RESEARCH MATERIALS`
         });
 
@@ -439,28 +553,35 @@ Generate the Bain-style "Highlights" wording now. Remember:
           });
           const rawContent = wordingResponse.choices[0]?.message?.content;
           wording = typeof rawContent === 'string' ? rawContent : '';
+          
+          // Post-process: remove any ** bold markers
+          wording = wording.replace(/\*\*/g, '');
+          // Post-process: remove periods at end of lines
+          wording = wording.replace(/\.(\s*\n)/g, '$1');
+          wording = wording.replace(/\.(\s*)$/g, '$1');
         } catch (error) {
           console.error("Wording generation error:", error);
-          wording = `• **Mass segment outgrowing** thanks to new retail model disruption and geographic expansion
-  – Luckin's low-cost app-based platform capturing price-sensitive consumers seeking convenience
-  – Tier-2+ cities showing strong adoption as coffee consumption habit spreads beyond tier-1
+          wording = `• High-grade: Outgrowing overall market driven by super-high grade new product launches; ASP uplift from premiumization
+  – New UMF20+ products commanding price premium, attracting health-conscious consumers
+  – Brand investment in high-grade positioning paying off with improved mix
 
-• **Mid segment facing competitive squeeze** from both mass and premium players
-  – Tier-1 market saturation and rising costs limiting expansion opportunities
-  – Product differentiation and quality positioning becoming key growth levers
+• Low-grade: Recovery post-inventory correction, with '24-'30E growth accelerating vs '19-'24
+  – Inventory overhang largely cleared by end of '24 per boss feedback
+  – Price war subsiding as supply-demand rebalances
 
-• **Premium segment losing share** to domestic value-oriented brands
-  – International chains struggling against local competitors' aggressive pricing
-  – Large-store model increasingly unviable outside tier-1 cities`;
+• Other products: Steady growth maintaining market share
+  – Diversification into adjacent categories providing stability
+  – Lower volatility vs core honey segments`;
         }
 
-        // Step 2: Generate source citations
+        // Step 2: Generate source citations with URL support
         let citations: Array<{
           bullet: string;
           sources: Array<{
             type: string;
             detail: string;
             location: string;
+            url?: string;
           }>;
         }> = [];
 
@@ -471,7 +592,12 @@ Generate the Bain-style "Highlights" wording now. Remember:
               role: "user", 
               content: `Here is the generated wording:\n\n${wording}\n\n---\n\nHere are ALL the sources that were provided (you MUST cite from these):\n\n${contextParts.join("\n\n---\n\n")}\n\n---\n\nAvailable source types: ${availableSources.join(", ")}\n\nFor each bullet point in the wording, identify which source(s) it came from. 
               
-CRITICAL: You MUST cite from the provided sources above. "General Knowledge" should ONLY be used if NONE of the provided sources contain relevant information. Quote the exact text from sources when possible.`
+CRITICAL: 
+- You MUST cite from the provided sources above
+- "General Knowledge" should ONLY be used if NONE of the provided sources contain relevant information
+- Quote the exact text from sources when possible
+- For Web sources, ALWAYS include the URL
+- Validate that sources are relevant to the industry being analyzed`
             }
           ];
 
@@ -498,7 +624,8 @@ CRITICAL: You MUST cite from the provided sources above. "General Knowledge" sho
                               properties: {
                                 type: { type: "string", description: "Source type: Boss, Expert, PDF, Web, Other, Chart, or General Knowledge" },
                                 detail: { type: "string", description: "EXACT QUOTE from the source" },
-                                location: { type: "string", description: "Specific location in the source" }
+                                location: { type: "string", description: "Specific location in the source" },
+                                url: { type: "string", description: "URL if available (for Web sources)" }
                               },
                               required: ["type", "detail", "location"],
                               additionalProperties: false

@@ -12,7 +12,7 @@ import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
-import { Upload, FileText, Image, Sparkles, Copy, RefreshCw, ChevronRight, Loader2, X, ChevronDown, BookOpen, CheckCircle, Globe } from "lucide-react";
+import { Upload, FileText, Image, Sparkles, Copy, RefreshCw, ChevronRight, Loader2, X, ChevronDown, BookOpen, CheckCircle, Globe, ExternalLink, Shield } from "lucide-react";
 
 type Framework = "breakdown" | "time" | "hybrid";
 
@@ -22,6 +22,7 @@ type Citation = {
     type: string;
     detail: string;
     location: string;
+    url?: string;
   }>;
 };
 
@@ -233,6 +234,9 @@ export default function Home() {
       fullText += `\n[${i + 1}] ${citation.bullet.substring(0, 50)}...\n`;
       citation.sources.forEach(source => {
         fullText += `    - ${source.type}: ${source.location}\n`;
+        if (source.url) {
+          fullText += `      URL: ${source.url}\n`;
+        }
         if (source.detail) {
           fullText += `      "${source.detail}"\n`;
         }
@@ -313,12 +317,42 @@ export default function Home() {
     }
   };
 
+  const getSourceTierBadge = (type: string, location: string) => {
+    // Check for authority tier based on location/source name
+    const locationLower = location.toLowerCase();
+    const tier1 = ["广发", "天风", "国金", "中信", "招商", "华泰", "国海", "东方"];
+    const tier2 = ["morgan stanley", "goldman", "jp morgan", "bofa", "credit suisse", "ubs", "citi"];
+    const tier3 = ["艾瑞", "灼识", "久谦", "艺恩", "德勤", "deloitte", "麦肯锡", "mckinsey", "bcg", "贝恩", "bain"];
+    
+    if (tier1.some(t => locationLower.includes(t.toLowerCase()))) {
+      return <Badge variant="outline" className="ml-2 text-xs bg-emerald-50 text-emerald-700 border-emerald-200"><Shield className="w-3 h-3 mr-1" />Tier 1 券商</Badge>;
+    }
+    if (tier2.some(t => locationLower.includes(t))) {
+      return <Badge variant="outline" className="ml-2 text-xs bg-blue-50 text-blue-700 border-blue-200"><Shield className="w-3 h-3 mr-1" />Tier 2 投行</Badge>;
+    }
+    if (tier3.some(t => locationLower.includes(t))) {
+      return <Badge variant="outline" className="ml-2 text-xs bg-violet-50 text-violet-700 border-violet-200"><Shield className="w-3 h-3 mr-1" />Tier 3 咨询</Badge>;
+    }
+    return null;
+  };
+
   const getPdfStatusIcon = (status: PdfFile["status"]) => {
     switch (status) {
       case "extracting": return <Loader2 className="w-4 h-4 animate-spin text-primary" />;
       case "done": return <CheckCircle className="w-4 h-4 text-green-600" />;
       case "error": return <X className="w-4 h-4 text-red-600" />;
       default: return <FileText className="w-4 h-4 text-muted-foreground" />;
+    }
+  };
+
+  // Helper to check if a string looks like a URL
+  const isValidUrl = (str: string | undefined): boolean => {
+    if (!str) return false;
+    try {
+      new URL(str);
+      return true;
+    } catch {
+      return str.startsWith("http://") || str.startsWith("https://");
     }
   };
 
@@ -428,7 +462,7 @@ export default function Home() {
                     <div>
                       <Label htmlFor="web-search" className="text-sm font-medium">Web Search</Label>
                       <p className="text-xs text-muted-foreground">
-                        Search for authoritative sources (research reports, industry data)
+                        Search for authoritative sources (券商研报, consulting reports)
                       </p>
                     </div>
                   </div>
@@ -438,6 +472,14 @@ export default function Home() {
                     onCheckedChange={setWebSearchEnabled}
                   />
                 </div>
+                {webSearchEnabled && (
+                  <div className="mt-3 p-3 bg-cyan-50 border border-cyan-200 rounded-lg text-xs text-cyan-800">
+                    <div className="font-medium mb-1">Priority Sources:</div>
+                    <div>1. 国内券商 (广发/天风/中信/招商/华泰)</div>
+                    <div>2. 国外投行 (MS/GS/JPM)</div>
+                    <div>3. 咨询机构 (艾瑞/灼识/德勤/MBB)</div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -638,6 +680,10 @@ export default function Home() {
                 <div className="bg-muted p-6 rounded-lg font-mono text-sm whitespace-pre-wrap">
                   {generatedWording}
                 </div>
+                <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+                  <CheckCircle className="w-3 h-3 text-green-600" />
+                  <span>Format: No periods, no bold markers, Bain time format ('19, '24, '19-'24E)</span>
+                </div>
               </CardContent>
             </Card>
 
@@ -648,6 +694,7 @@ export default function Home() {
                   <CardTitle className="flex items-center gap-2">
                     <BookOpen className="w-5 h-5" />
                     Source Citations
+                    <Badge variant="outline" className="ml-2">{citations.length} bullets</Badge>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -683,12 +730,26 @@ export default function Home() {
                         <div className="ml-7 mt-2 space-y-2">
                           {citation.sources.map((source, sIdx) => (
                             <div key={sIdx} className="p-3 bg-background border rounded-lg">
-                              <div className="flex items-center gap-2 mb-2">
+                              <div className="flex items-center gap-2 mb-2 flex-wrap">
                                 <span className={`text-xs px-2 py-0.5 rounded-full border ${getSourceBadgeColor(source.type)}`}>
                                   {source.type}
                                 </span>
+                                {getSourceTierBadge(source.type, source.location)}
                                 <span className="text-xs text-muted-foreground">{source.location}</span>
                               </div>
+                              {source.url && isValidUrl(source.url) && (
+                                <div className="mb-2">
+                                  <a 
+                                    href={source.url} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-cyan-600 hover:text-cyan-800 hover:underline flex items-center gap-1"
+                                  >
+                                    <ExternalLink className="w-3 h-3" />
+                                    {source.url.length > 60 ? source.url.substring(0, 60) + "..." : source.url}
+                                  </a>
+                                </div>
+                              )}
                               <p className="text-sm text-muted-foreground italic">"{source.detail}"</p>
                             </div>
                           ))}

@@ -44,3 +44,19 @@
 - [x] Implement hybrid extraction: text parsing first, Vision API fallback
 - [x] Handle multi-page PDFs (extract all pages)
 - [x] Update frontend to show extraction progress for multi-page PDFs
+
+## v1.6 Iteration - User Feedback Fixes
+
+### Pattern-level issues
+- [x] Avoid saying "value growth" - chart already shows market value trend
+- [x] Cover both historical and future trends (combine if same driver, separate if different)
+
+### Format issues
+- [x] Remove "**" bold markers for easy copy-paste
+- [x] Use Bain time format: '19, '24, '19-'24, '24-'30E
+
+### Source citation issues
+- [x] Add clickable URLs for web search sources
+- [x] Implement source validation mechanism with authority ranking
+- [x] Exclude low-quality sources (纯目录、新闻稿、财报、摘要、营销文档)
+- [x] Quality standards: >200KB, >15页, 2023年后, 包含数据图表
