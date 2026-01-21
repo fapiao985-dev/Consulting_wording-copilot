@@ -4,6 +4,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import { invokeLLM } from "./_core/llm";
+import { PDFParse } from "pdf-parse";
 
 // Bain-style wording prompt - based on actual reference slides
 const BAIN_WORDING_SYSTEM_PROMPT = `You are a senior Bain & Company consultant. Generate slide wording in EXACT Bain style.
@@ -93,8 +94,8 @@ OUTPUT FORMAT (JSON):
 
 IMPORTANT: If you cannot find a specific source for a claim, reconsider whether that claim should be in the wording at all. The wording should be based on provided research, not general knowledge.`;
 
-// PDF extraction prompt
-const PDF_EXTRACTION_PROMPT = `You are a research analyst. Extract key market insights from this PDF research report.
+// PDF extraction prompt for Vision API (fallback for scanned PDFs)
+const PDF_VISION_EXTRACTION_PROMPT = `You are a research analyst. Extract key market insights from this PDF page image.
 
 Focus on extracting:
 1. Market size data and growth rates
@@ -106,7 +107,6 @@ Focus on extracting:
 7. Specific data points, statistics, and quotes
 
 Format your extraction as structured notes with clear section headers.
-Include page numbers or section references where possible.
 Quote exact text when it contains important data or insights.`;
 
 // Web search prompt
@@ -121,6 +121,52 @@ Focus on:
 
 Return queries as a JSON array of strings.`;
 
+// Helper function to extract text from PDF using pdf-parse
+async function extractPdfText(base64Data: string): Promise<{ text: string; numPages: number }> {
+  try {
+    // Remove data URL prefix if present
+    const base64Content = base64Data.replace(/^data:application\/pdf;base64,/, '');
+    const buffer = Buffer.from(base64Content, 'base64');
+    
+    // Use PDFParse class
+    const parser = new PDFParse({ data: buffer });
+    const textResult = await parser.getText();
+    const info = await parser.getInfo();
+    await parser.destroy();
+    
+    return {
+      text: textResult.text || '',
+      numPages: info.total || 0
+    };
+  } catch (error) {
+    console.error("PDF text extraction error:", error);
+    return { text: '', numPages: 0 };
+  }
+}
+
+// Helper function to extract content from PDF page image using Vision API
+async function extractPdfPageWithVision(pageImageBase64: string, pageNum: number, filename: string): Promise<string> {
+  try {
+    const response = await invokeLLM({
+      messages: [
+        { role: "system", content: PDF_VISION_EXTRACTION_PROMPT },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: `Extract key market insights from page ${pageNum} of: ${filename}` },
+            { type: "image_url", image_url: { url: pageImageBase64 } }
+          ]
+        }
+      ] as any,
+    });
+    const content = response.choices[0]?.message?.content;
+    return typeof content === 'string' ? content : '';
+  } catch (error) {
+    console.error(`Vision extraction error for page ${pageNum}:`, error);
+    return '';
+  }
+}
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -133,31 +179,81 @@ export const appRouter = router({
   }),
 
   copilot: router({
-    // Extract text from PDF using vision
+    // Hybrid PDF extraction: text parsing first, Vision API fallback
     extractPdfContent: publicProcedure
       .input(z.object({
         pdfBase64: z.string(),
         filename: z.string(),
+        pageImages: z.array(z.string()).optional(), // Optional page images for Vision API fallback
       }))
       .mutation(async ({ input }) => {
         try {
-          const response = await invokeLLM({
-            messages: [
-              { role: "system", content: PDF_EXTRACTION_PROMPT },
-              {
-                role: "user",
-                content: [
-                  { type: "text", text: `Extract key market insights from this research report: ${input.filename}` },
-                  { type: "image_url", image_url: { url: input.pdfBase64 } }
-                ]
+          // Step 1: Try text extraction first (fast, works for native PDFs)
+          const { text, numPages } = await extractPdfText(input.pdfBase64);
+          
+          // Check if text extraction was successful (threshold: at least 100 chars per page on average)
+          const hasEnoughText = text.length > numPages * 100;
+          
+          if (hasEnoughText) {
+            // Text extraction successful - return structured content
+            return { 
+              content: `[PDF: ${input.filename}]\nPages: ${numPages}\n\n${text}`,
+              method: 'text',
+              numPages,
+              success: true
+            };
+          }
+          
+          // Step 2: Text extraction failed or insufficient - use Vision API fallback
+          if (input.pageImages && input.pageImages.length > 0) {
+            const pageContents: string[] = [];
+            
+            // Process each page image with Vision API
+            for (let i = 0; i < input.pageImages.length; i++) {
+              const pageContent = await extractPdfPageWithVision(
+                input.pageImages[i],
+                i + 1,
+                input.filename
+              );
+              if (pageContent) {
+                pageContents.push(`--- Page ${i + 1} ---\n${pageContent}`);
               }
-            ] as any,
-          });
-          const content = response.choices[0]?.message?.content;
-          return { content: typeof content === 'string' ? content : '' };
+            }
+            
+            if (pageContents.length > 0) {
+              return {
+                content: `[PDF: ${input.filename}]\nPages: ${input.pageImages.length} (extracted via OCR)\n\n${pageContents.join('\n\n')}`,
+                method: 'vision',
+                numPages: input.pageImages.length,
+                success: true
+              };
+            }
+          }
+          
+          // Step 3: Both methods failed - return partial text if any
+          if (text.length > 0) {
+            return {
+              content: `[PDF: ${input.filename}]\nPages: ${numPages}\n(Partial extraction)\n\n${text}`,
+              method: 'text-partial',
+              numPages,
+              success: true
+            };
+          }
+          
+          return { 
+            content: `[PDF: ${input.filename}]\nUnable to extract content - please check if PDF is readable`,
+            method: 'failed',
+            numPages: 0,
+            success: false
+          };
         } catch (error) {
           console.error("PDF extraction error:", error);
-          return { content: '' };
+          return { 
+            content: '',
+            method: 'error',
+            numPages: 0,
+            success: false
+          };
         }
       }),
 
@@ -206,7 +302,6 @@ export const appRouter = router({
           }
 
           // Simulate web search results (in production, integrate with actual search API)
-          // For now, use LLM to generate authoritative-sounding research findings
           const searchResponse = await invokeLLM({
             messages: [
               { 

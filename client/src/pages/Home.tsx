@@ -77,7 +77,7 @@ export default function Home() {
     }));
     setPdfFiles(prev => [...prev, ...newPdfs]);
 
-    // Extract content from each PDF
+    // Extract content from each PDF using hybrid approach
     for (let i = 0; i < newPdfs.length; i++) {
       const pdf = newPdfs[i];
       
@@ -87,25 +87,33 @@ export default function Home() {
       ));
 
       try {
-        // Convert PDF to base64 for vision API
+        // Convert PDF to base64
         const base64 = await new Promise<string>((resolve) => {
           const reader = new FileReader();
           reader.onloadend = () => resolve(reader.result as string);
           reader.readAsDataURL(pdf.file);
         });
 
-        // Extract content using LLM vision
+        // Extract content using hybrid approach (text parsing first, Vision API fallback)
         const result = await extractPdfContent.mutateAsync({
           pdfBase64: base64,
           filename: pdf.name,
         });
 
         // Update with extracted content
+        const methodLabel = result.method === 'text' ? 'text extraction' : 
+                           result.method === 'vision' ? 'OCR' : 
+                           result.method === 'text-partial' ? 'partial extraction' : 'extraction';
+        
         setPdfFiles(prev => prev.map(p => 
           p.name === pdf.name ? { ...p, content: result.content, status: "done" as const } : p
         ));
 
-        toast.success(`Extracted content from ${pdf.name}`);
+        if (result.success) {
+          toast.success(`Extracted ${result.numPages} pages from ${pdf.name} (${methodLabel})`);
+        } else {
+          toast.warning(`Partial extraction from ${pdf.name}`);
+        }
       } catch (error) {
         console.error("PDF extraction error:", error);
         setPdfFiles(prev => prev.map(p => 

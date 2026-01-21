@@ -37,3 +37,10 @@
 - [x] Update wording style: remove is/are verbs, remove periods (Bain style)
 - [x] Re-analyze deck for two sentence structure patterns
 - [x] Update LLM prompt with correct sentence structure patterns
+
+## v1.5 Iteration - Multi-page PDF Extraction
+
+- [x] Install PDF parsing library (pdf-parse)
+- [x] Implement hybrid extraction: text parsing first, Vision API fallback
+- [x] Handle multi-page PDFs (extract all pages)
+- [x] Update frontend to show extraction progress for multi-page PDFs

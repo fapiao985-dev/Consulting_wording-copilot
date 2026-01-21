@@ -170,17 +170,34 @@ describe("copilot.generateWording", () => {
 });
 
 describe("copilot.extractPdfContent", () => {
-  it("extracts content from PDF using vision API", async () => {
+  it("extracts content from PDF using hybrid approach", async () => {
     const ctx = createPublicContext();
     const caller = appRouter.createCaller(ctx);
 
     const result = await caller.copilot.extractPdfContent({
-      pdfBase64: "data:image/png;base64,test",
+      pdfBase64: "data:application/pdf;base64,test",
       filename: "test_report.pdf",
     });
 
     expect(result).toHaveProperty("content");
+    expect(result).toHaveProperty("method");
+    expect(result).toHaveProperty("numPages");
+    expect(result).toHaveProperty("success");
     expect(typeof result.content).toBe("string");
+  });
+
+  it("returns correct structure for multi-page PDF", async () => {
+    const ctx = createPublicContext();
+    const caller = appRouter.createCaller(ctx);
+
+    const result = await caller.copilot.extractPdfContent({
+      pdfBase64: "data:application/pdf;base64,JVBERi0xLjQK",
+      filename: "multi-page-report.pdf",
+    });
+
+    expect(["text", "vision", "text-partial", "failed", "error"]).toContain(result.method);
+    expect(typeof result.numPages).toBe("number");
+    expect(typeof result.success).toBe("boolean");
   });
 });
 
