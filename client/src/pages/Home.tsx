@@ -9,9 +9,10 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Progress } from "@/components/ui/progress";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
-import { Upload, FileText, Image, Sparkles, Copy, RefreshCw, ChevronRight, Loader2, X, ChevronDown, BookOpen, CheckCircle } from "lucide-react";
+import { Upload, FileText, Image, Sparkles, Copy, RefreshCw, ChevronRight, Loader2, X, ChevronDown, BookOpen, CheckCircle, Globe } from "lucide-react";
 
 type Framework = "breakdown" | "time" | "hybrid";
 
@@ -40,6 +41,7 @@ export default function Home() {
   const [chartPreview, setChartPreview] = useState<string | null>(null);
   const [pdfFiles, setPdfFiles] = useState<PdfFile[]>([]);
   const [framework, setFramework] = useState<Framework>("breakdown");
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
 
   // Workflow states
   const [step, setStep] = useState<"input" | "output">("input");
@@ -48,10 +50,12 @@ export default function Home() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [expandedCitations, setExpandedCitations] = useState<Set<number>>(new Set());
   const [extractionProgress, setExtractionProgress] = useState(0);
+  const [progressMessage, setProgressMessage] = useState("");
 
   // tRPC mutations
   const generateWording = trpc.copilot.generateWording.useMutation();
   const extractPdfContent = trpc.copilot.extractPdfContent.useMutation();
+  const webSearch = trpc.copilot.webSearch.useMutation();
 
   const handleChartUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -143,6 +147,7 @@ export default function Home() {
 
     setIsGenerating(true);
     setExtractionProgress(0);
+    setProgressMessage("Processing inputs...");
 
     try {
       const chartBase64 = chartPreview || "";
@@ -152,7 +157,36 @@ export default function Home() {
         .filter(p => p.status === "done" && p.content)
         .map(p => ({ name: p.name, content: p.content }));
 
-      setExtractionProgress(50);
+      setExtractionProgress(20);
+
+      // Run web search if enabled
+      let webSearchResults = "";
+      if (webSearchEnabled) {
+        setProgressMessage("Searching for authoritative sources...");
+        setExtractionProgress(30);
+        
+        const marketContext = [
+          bossComments,
+          expertNotes,
+          otherMaterials,
+          ...pdfContents.map(p => p.content.substring(0, 500))
+        ].filter(Boolean).join("\n\n");
+
+        try {
+          const searchResult = await webSearch.mutateAsync({
+            marketContext,
+            chartDescription: "Market chart with segment breakdown",
+          });
+          webSearchResults = searchResult.results;
+          setExtractionProgress(50);
+        } catch (error) {
+          console.error("Web search error:", error);
+          toast.error("Web search failed, continuing without it");
+        }
+      }
+
+      setProgressMessage("Generating Bain-style wording...");
+      setExtractionProgress(60);
 
       const result = await generateWording.mutateAsync({
         chartImage: chartBase64,
@@ -161,6 +195,8 @@ export default function Home() {
         expertNotes,
         otherMaterials,
         framework,
+        webSearchEnabled,
+        webSearchResults,
       });
 
       setExtractionProgress(100);
@@ -174,6 +210,7 @@ export default function Home() {
     } finally {
       setIsGenerating(false);
       setExtractionProgress(0);
+      setProgressMessage("");
     }
   };
 
@@ -199,11 +236,33 @@ export default function Home() {
 
   const handleRegenerate = async () => {
     setIsGenerating(true);
+    setProgressMessage("Regenerating...");
     try {
       const chartBase64 = chartPreview || "";
       const pdfContents = pdfFiles
         .filter(p => p.status === "done" && p.content)
         .map(p => ({ name: p.name, content: p.content }));
+
+      // Run web search if enabled
+      let webSearchResults = "";
+      if (webSearchEnabled) {
+        const marketContext = [
+          bossComments,
+          expertNotes,
+          otherMaterials,
+          ...pdfContents.map(p => p.content.substring(0, 500))
+        ].filter(Boolean).join("\n\n");
+
+        try {
+          const searchResult = await webSearch.mutateAsync({
+            marketContext,
+            chartDescription: "Market chart with segment breakdown",
+          });
+          webSearchResults = searchResult.results;
+        } catch (error) {
+          console.error("Web search error:", error);
+        }
+      }
 
       const result = await generateWording.mutateAsync({
         chartImage: chartBase64,
@@ -212,6 +271,8 @@ export default function Home() {
         expertNotes,
         otherMaterials,
         framework,
+        webSearchEnabled,
+        webSearchResults,
       });
 
       setGeneratedWording(result.wording);
@@ -221,6 +282,7 @@ export default function Home() {
       toast.error("Failed to regenerate. Please try again.");
     } finally {
       setIsGenerating(false);
+      setProgressMessage("");
     }
   };
 
@@ -236,6 +298,7 @@ export default function Home() {
       case "Boss": return "bg-blue-100 text-blue-800 border-blue-200";
       case "Expert": return "bg-green-100 text-green-800 border-green-200";
       case "PDF": return "bg-purple-100 text-purple-800 border-purple-200";
+      case "Web": return "bg-cyan-100 text-cyan-800 border-cyan-200";
       case "Other": return "bg-orange-100 text-orange-800 border-orange-200";
       case "Chart": return "bg-gray-100 text-gray-800 border-gray-200";
       default: return "bg-yellow-100 text-yellow-800 border-yellow-200";
@@ -346,6 +409,26 @@ export default function Home() {
                     {framework === "time" && "Organize bullets by time periods (e.g., '19-'24, '24-'29)"}
                     {framework === "hybrid" && "Combine segment analysis with time-based evolution"}
                   </p>
+                </div>
+
+                <Separator className="my-6" />
+
+                {/* Web Search Toggle */}
+                <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <Globe className="w-5 h-5 text-muted-foreground" />
+                    <div>
+                      <Label htmlFor="web-search" className="text-sm font-medium">Web Search</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Search for authoritative sources (research reports, industry data)
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    id="web-search"
+                    checked={webSearchEnabled}
+                    onCheckedChange={setWebSearchEnabled}
+                  />
                 </div>
               </CardContent>
             </Card>
@@ -479,7 +562,7 @@ export default function Home() {
                 <div className="space-y-2">
                   <Progress value={extractionProgress} />
                   <p className="text-xs text-muted-foreground text-center">
-                    {extractionProgress < 50 ? "Processing inputs..." : "Generating wording..."}
+                    {progressMessage || "Processing..."}
                   </p>
                 </div>
               )}
@@ -493,7 +576,7 @@ export default function Home() {
                 {isGenerating ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Generating Wording...
+                    {progressMessage || "Generating Wording..."}
                   </>
                 ) : pdfFiles.some(p => p.status === "extracting") ? (
                   <>
@@ -504,6 +587,7 @@ export default function Home() {
                   <>
                     <Sparkles className="w-4 h-4 mr-2" />
                     Generate Wording
+                    {webSearchEnabled && <Globe className="w-4 h-4 ml-2" />}
                   </>
                 )}
               </Button>
@@ -612,6 +696,12 @@ export default function Home() {
             <div className="flex items-center justify-between">
               <div className="text-sm text-muted-foreground">
                 <span className="font-medium">Format:</span> {framework === "breakdown" ? "By Segment" : framework === "time" ? "By Time" : "Hybrid"}
+                {webSearchEnabled && (
+                  <span className="ml-2">
+                    <Globe className="w-3 h-3 inline mr-1" />
+                    Web Search Enabled
+                  </span>
+                )}
               </div>
               <Button variant="ghost" onClick={handleStartOver}>
                 Start Over

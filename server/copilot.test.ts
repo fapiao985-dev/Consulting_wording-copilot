@@ -183,3 +183,24 @@ describe("copilot.extractPdfContent", () => {
     expect(typeof result.content).toBe("string");
   });
 });
+
+describe("copilot.generateWording with web search", () => {
+  it("accepts web search parameters", async () => {
+    const ctx = createPublicContext();
+    const caller = appRouter.createCaller(ctx);
+
+    const result = await caller.copilot.generateWording({
+      chartImage: "data:image/png;base64,test",
+      pdfFiles: [],
+      bossComments: "Test",
+      expertNotes: "",
+      otherMaterials: "",
+      framework: "breakdown",
+      webSearchEnabled: true,
+      webSearchResults: "Euromonitor 2024: China coffee market grew 15%",
+    });
+
+    expect(result).toHaveProperty("wording");
+    expect(result).toHaveProperty("citations");
+  });
+});

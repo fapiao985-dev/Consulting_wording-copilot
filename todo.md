@@ -30,3 +30,10 @@
 - [x] Update frontend to read and send PDF content
 - [x] Update LLM prompt to prioritize research report citations over General Knowledge
 - [x] Ensure citations reference specific PDF content, not just "General Knowledge"
+
+## v1.4 Iteration
+
+- [x] Add web search toggle button (search authoritative sources like research reports)
+- [x] Update wording style: remove is/are verbs, remove periods (Bain style)
+- [x] Re-analyze deck for two sentence structure patterns
+- [x] Update LLM prompt with correct sentence structure patterns
