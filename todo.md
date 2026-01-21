@@ -84,3 +84,9 @@
 - [x] Extract chart title using Vision API
 - [x] Compare extracted title with user-entered industry
 - [x] Show dialog if mismatch, prompt user to re-enter industry
+
+## v1.8.1 Iteration - Chart Industry Auto-fill Fix
+
+- [x] Auto-fill industry text field immediately when chart is uploaded (always fill, not just when empty)
+- [x] Keep the text field editable after auto-fill
+- [x] Remove the mismatch dialog - just auto-fill and let user edit if needed

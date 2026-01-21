@@ -11,8 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { AlertTriangle } from "lucide-react";
+
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { Upload, FileText, Image, Sparkles, Copy, RefreshCw, ChevronRight, Loader2, X, ChevronDown, BookOpen, CheckCircle, Globe, ExternalLink, Building2 } from "lucide-react";
@@ -48,10 +47,9 @@ export default function Home() {
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [industry, setIndustry] = useState(""); // Industry input for source filtering
 
-  // Chart title validation states
+  // Chart title extraction states
   const [chartIndustry, setChartIndustry] = useState<string | null>(null);
   const [chartTitle, setChartTitle] = useState<string | null>(null);
-  const [showMismatchDialog, setShowMismatchDialog] = useState(false);
   const [isExtractingTitle, setIsExtractingTitle] = useState(false);
 
   // Workflow states
@@ -78,18 +76,16 @@ export default function Home() {
         const base64 = reader.result as string;
         setChartPreview(base64);
         
-        // Extract chart title for industry validation
+        // Extract chart title and auto-fill industry field
         setIsExtractingTitle(true);
         try {
           const result = await extractChartTitle.mutateAsync({ chartImage: base64 });
           if (result.industry) {
             setChartIndustry(result.industry);
             setChartTitle(result.title);
-            // Auto-fill industry if empty
-            if (!industry.trim()) {
-              setIndustry(result.industry);
-              toast.success(`Detected industry: ${result.industry}`);
-            }
+            // Always auto-fill industry field with detected value (user can still edit)
+            setIndustry(result.industry);
+            toast.success(`Detected industry: ${result.industry}`);
           }
         } catch (error) {
           console.error("Chart title extraction error:", error);
@@ -99,7 +95,7 @@ export default function Home() {
       };
       reader.readAsDataURL(file);
     }
-  }, [extractChartTitle, industry]);
+  }, [extractChartTitle]);
 
   const handlePdfUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -174,24 +170,6 @@ export default function Home() {
     });
   };
 
-  // Check if industry matches chart
-  const checkIndustryMatch = (userIndustry: string, chartIndustry: string | null): boolean => {
-    if (!chartIndustry) return true; // No chart industry detected, skip validation
-    const userLower = userIndustry.toLowerCase().trim();
-    const chartLower = chartIndustry.toLowerCase().trim();
-    
-    // Check for exact match or substring match
-    if (userLower === chartLower) return true;
-    if (userLower.includes(chartLower) || chartLower.includes(userLower)) return true;
-    
-    // Check for common variations
-    const userWords = userLower.split(/[\s,，、]+/);
-    const chartWords = chartLower.split(/[\s,，、]+/);
-    const hasOverlap = userWords.some(w => chartWords.some(cw => w.includes(cw) || cw.includes(w)));
-    
-    return hasOverlap;
-  };
-
   const handleGenerate = async () => {
     if (!chartImage) {
       toast.error("Please upload a chart image first");
@@ -208,12 +186,6 @@ export default function Home() {
     const extractingPdfs = pdfFiles.filter(p => p.status === "extracting");
     if (extractingPdfs.length > 0) {
       toast.error("Please wait for PDF extraction to complete");
-      return;
-    }
-
-    // Validate industry matches chart (if industry is provided and chart industry was detected)
-    if (industry.trim() && chartIndustry && !checkIndustryMatch(industry, chartIndustry)) {
-      setShowMismatchDialog(true);
       return;
     }
 
@@ -410,48 +382,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Industry Mismatch Dialog */}
-      <Dialog open={showMismatchDialog} onOpenChange={setShowMismatchDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-amber-500" />
-              Industry Mismatch Detected
-            </DialogTitle>
-            <DialogDescription className="space-y-3 pt-2">
-              <p>The industry you entered does not match the chart:</p>
-              <div className="bg-muted p-3 rounded-lg space-y-2 text-sm">
-                <div><span className="font-medium">Your input:</span> {industry}</div>
-                <div><span className="font-medium">Chart industry:</span> {chartIndustry}</div>
-                {chartTitle && <div><span className="font-medium">Chart title:</span> {chartTitle}</div>}
-              </div>
-              <p>Would you like to update your industry input or proceed anyway?</p>
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex gap-2 sm:gap-0">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setIndustry(chartIndustry || "");
-                setShowMismatchDialog(false);
-                toast.success(`Industry updated to: ${chartIndustry}`);
-              }}
-            >
-              Use Chart Industry
-            </Button>
-            <Button
-              variant="default"
-              onClick={() => {
-                setShowMismatchDialog(false);
-                proceedWithGeneration();
-              }}
-            >
-              Proceed Anyway
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* Header */}
       <header className="border-b border-border bg-card">
         <div className="container py-4">
@@ -559,12 +489,7 @@ export default function Home() {
                   <p className="text-xs text-muted-foreground">
                     Enter the industry to filter relevant sources (required for web search)
                   </p>
-                  {chartIndustry && industry.trim() && !checkIndustryMatch(industry, chartIndustry) && (
-                    <div className="p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800 flex items-center gap-2">
-                      <AlertTriangle className="w-3 h-3" />
-                      Industry may not match chart ({chartIndustry})
-                    </div>
-                  )}
+
                 </div>
 
                 <Separator className="my-6" />
