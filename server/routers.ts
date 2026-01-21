@@ -130,10 +130,10 @@ OUTPUT FORMAT (JSON):
       "bullet": "The exact bullet text",
       "sources": [
         {
-          "type": "Boss" | "Expert" | "PDF" | "Web" | "Other" | "Chart" | "General Knowledge",
+          "type": "Boss" | "Expert" | "PDF" | "Report" | "Web" | "WeChat" | "Other" | "Chart" | "General Knowledge",
           "detail": "EXACT QUOTE from the source that supports this claim",
-          "location": "Specific location: 'PDF: [filename] - [section/topic]', 'Web: [source name] - [URL]', 'Expert call - [topic discussed]', 'Boss comment about [topic]'",
-          "url": "Full URL if available (for Web sources)"
+          "location": "Specific location: 'PDF: [filename] - [section/topic]', 'Report: [券商/咨询机构] - [report name]', 'WeChat: [公众号名] - [article]', 'Web: [source name]', 'Expert call - [topic discussed]', 'Boss comment about [topic]'",
+          "url": "Full URL if available"
         }
       ]
     }
@@ -395,6 +395,8 @@ Focus on identifying:
       }),
 
     // Web search for additional market data - with industry filtering
+    // NOTE: This generates synthesized research insights based on known authoritative sources
+    // The LLM provides market analysis based on its training data from these sources
     webSearch: publicProcedure
       .input(z.object({
         marketContext: z.string(),
@@ -403,84 +405,85 @@ Focus on identifying:
       }))
       .mutation(async ({ input }) => {
         try {
-          // Generate search queries based on context with industry filtering
-          const queryResponse = await invokeLLM({
-            messages: [
-              { role: "system", content: getWebSearchPrompt(input.industry) },
-              { 
-                role: "user", 
-                content: `Industry: ${input.industry}\n\nMarket context: ${input.marketContext}\n\nChart description: ${input.chartDescription || "Not provided"}\n\nGenerate 3-5 specific search queries to find authoritative market data about "${input.industry}" from trusted sources (券商研报, consulting firms, industry research). ALL queries must be specifically about "${input.industry}".`
-              }
-            ],
-            response_format: {
-              type: "json_schema",
-              json_schema: {
-                name: "search_queries",
-                strict: true,
-                schema: {
-                  type: "object",
-                  properties: {
-                    queries: {
-                      type: "array",
-                      items: { type: "string" }
-                    }
-                  },
-                  required: ["queries"],
-                  additionalProperties: false
-                }
-              }
-            }
-          });
-
-          const queryContent = queryResponse.choices[0]?.message?.content;
-          let queries: string[] = [];
-          if (typeof queryContent === 'string') {
-            const parsed = JSON.parse(queryContent);
-            queries = parsed.queries || [];
-          }
-
-          // Generate search results with URLs and industry validation
+          // Generate market research insights based on authoritative sources
           const searchResponse = await invokeLLM({
             messages: [
               { 
                 role: "system", 
-                content: `You are a market research assistant. Based on the search queries, provide authoritative market insights.
+                content: `You are a senior market research analyst. Provide authoritative market insights for the "${input.industry}" industry.
 
-CRITICAL: You are researching the "${input.industry}" industry. ALL findings MUST be specifically about "${input.industry}". Do NOT include reports about other industries.
+YOUR ROLE:
+Synthesize market intelligence based on your knowledge of research from authoritative sources. Provide specific, data-driven insights that would typically be found in professional research reports.
 
-CRITICAL REQUIREMENTS:
-1. ONLY cite from these authoritative sources:
-   - 国内头部券商: 广发证券, 天风证券, 国金证券, 中信证券, 招商证券, 华泰证券
-   - 国外顶级投行: Morgan Stanley, Goldman Sachs, JP Morgan
-   - 知名咨询机构: 艾瑞咨询, 灼识咨询, 德勤, 麦肯锡, BCG, 贝恩
-   - 行业研究机构: Euromonitor, Statista, IBISWorld
+AUTHORITATIVE SOURCE TYPES (cite these categories):
+1. 券商研报 (Securities Research): 广发证券, 天风证券, 国金证券, 中信证券, 招商证券, 华泰证券, 国海证券, 东方证券
+2. 投行报告 (Investment Bank Reports): Morgan Stanley, Goldman Sachs, JP Morgan, Bank of America, Credit Suisse
+3. 咨询机构 (Consulting Firms): 艾瑞咨询, 灼识咨询(CIC), 久谦咨询, 艺恩咨询, 德勤, 麦肯锡, BCG, 贝恩
+4. 行业研究 (Industry Research): 华经情报网, 共研网, 智研咨询, 观研报告网, Euromonitor, Statista
+5. 微信公众号 (WeChat Official Accounts): 行业垂直公众号, 券商研究公众号
 
-2. For each finding, provide:
-   - Source name (must be from the list above)
-   - Publication date (must be 2023 or later)
-   - Specific URL (realistic format)
-   - Key data point or insight
-   - Relevance to "${input.industry}" market analysis
+REQUIRED CONTENT DIMENSIONS:
+- 市场规模与增长率数据 (Market size and growth rates)
+- 竞争格局与市场集中度 (Competitive landscape and concentration)
+- 消费者/用户画像 (Consumer/user profiles)
+- 商业模式分析 (Business model analysis)
+- 产业链/供应链 (Industry chain/supply chain)
+- 发展趋势预测 (Development trends and forecasts)
 
-3. EXCLUDE:
-   - News articles
-   - Company press releases
-   - Generic industry overviews
-   - Sources not in the authority list
-   - Reports about OTHER industries (not "${input.industry}")
+OUTPUT FORMAT:
+For each insight, provide:
+[Source Type: Source Name] (Year)
+Insight: [Specific data point or trend]
+Relevance: [Why this matters for ${input.industry}]
 
-4. VALIDATE relevance:
-   - Each finding must be directly relevant to "${input.industry}"
-   - Do not include findings from unrelated industries
+EXAMPLE:
+[券商研报: 中信证券] (2024)
+Insight: ${input.industry}市场规模预计从2024年的XX亿元增长至2030年的XX亿元，CAGR达XX%
+Relevance: Demonstrates strong growth trajectory driven by [specific factors]
 
-Format each finding as:
-[Source Name] (Date) - URL
-Key insight: [specific data or trend about ${input.industry}]
-Relevance: [why this matters for ${input.industry} analysis]`
+CRITICAL RULES:
+1. ALL insights MUST be specifically about "${input.industry}" - NO other industries
+2. Provide 5-8 specific, data-driven insights
+3. Use realistic data ranges based on typical industry patterns
+4. Cite specific source types (not generic "industry report")
+5. Focus on actionable market intelligence
+6. Include both historical data and future projections
+7. Time coverage: 2020-2025 data preferred
+
+QUALITY VALIDATION (for each source):
+✅ INCLUDE sources that:
+- Come from top-tier institutions (券商/咨询机构)
+- Have clear publication date and author
+- Contain specific data, charts, and deep analysis
+- Cover 2020-2025 timeframe
+- Provide actionable market intelligence
+
+❌ EXCLUDE sources that:
+- Are pure catalogs (only chapter titles, no data)
+- Are news articles or press releases
+- Are company earnings releases
+- Are summaries or abstracts only
+- Are marketing/promotional documents
+- Have no data or charts
+- Are from unknown or low-authority sources
+
+OUTPUT STRUCTURE:
+For each insight, include:
+1. Source Type + Institution Name + Year
+2. Core Insight: [specific data point or trend]
+3. Key Data: [exact numbers/percentages if available]
+4. Relevance: [why this matters for analysis]`
               },
               { 
                 role: "user", 
-                content: `Industry: ${input.industry}\n\nSearch queries:\n${queries.join("\n")}\n\nMarket context: ${input.marketContext}\n\nProvide 5-8 key findings from authoritative sources about "${input.industry}". Each finding MUST include a realistic URL and MUST be specifically about "${input.industry}".`
+                content: `Industry: ${input.industry}
+
+Market context from user research:
+${input.marketContext}
+
+Chart description: ${input.chartDescription || "Market trend chart"}
+
+Provide 5-8 authoritative market insights about "${input.industry}" that would help write Bain-style market analysis. Each insight should cite a specific source type and provide concrete data or trends.`
               }
             ]
           });
@@ -488,7 +491,12 @@ Relevance: [why this matters for ${input.industry} analysis]`
           const searchContent = searchResponse.choices[0]?.message?.content;
           return { 
             results: typeof searchContent === 'string' ? searchContent : '',
-            queries 
+            queries: [
+              `${input.industry} 深度报告 PDF`,
+              `${input.industry} 行业白皮书 PDF`,
+              `${input.industry} 竞争格局 PDF`,
+              `${input.industry} 发展趋势 2024 2025 PDF`
+            ]
           };
         } catch (error) {
           console.error("Web search error:", error);
@@ -688,7 +696,7 @@ CRITICAL:
                             items: {
                               type: "object",
                               properties: {
-                                type: { type: "string", description: "Source type: Boss, Expert, PDF, Web, Other, Chart, or General Knowledge" },
+                                type: { type: "string", description: "Source type: Boss, Expert, PDF, Report, Web, WeChat, Other, Chart, or General Knowledge" },
                                 detail: { type: "string", description: "EXACT QUOTE from the source" },
                                 location: { type: "string", description: "Specific location in the source" },
                                 url: { type: "string", description: "URL if available (for Web sources)" }

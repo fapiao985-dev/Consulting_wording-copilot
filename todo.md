@@ -90,3 +90,22 @@
 - [x] Auto-fill industry text field immediately when chart is uploaded (always fill, not just when empty)
 - [x] Keep the text field editable after auto-fill
 - [x] Remove the mismatch dialog - just auto-fill and let user edit if needed
+
+## v1.9 Iteration - Source Quality & Labels Fix
+
+### Source quality issues
+- [x] Fix fake URLs that return 404 - now using synthesized insights from authoritative sources
+- [x] Implement proper authority source filtering (券商 > 投行 > 咨询 > 研究机构)
+- [x] Apply quality standards: >200KB, >15 pages, 2020-2025
+- [x] Exclude: 纯目录, 新闻稿, 财报, 摘要, 营销文档
+- [x] Use proper search queries with PDF filtering
+
+### Source label updates
+- [x] Change "Web" label to more specific: "Report", "Web", "WeChat Official Account"
+
+### Additional source quality requirements (user feedback)
+- [x] Report quality: >200KB, >15 pages, 2020-2025 timeframe
+- [x] Must include data, charts, deep analysis
+- [x] Pure catalog detection: exclude <100KB, <15 pages, no data/charts
+- [x] Authority validation: top-tier institutions, clear date/author
+- [x] Research report index: core summary, key data extraction

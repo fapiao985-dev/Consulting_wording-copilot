@@ -353,7 +353,9 @@ export default function Home() {
       case "Boss": return "bg-blue-100 text-blue-800 border-blue-200";
       case "Expert": return "bg-green-100 text-green-800 border-green-200";
       case "PDF": return "bg-purple-100 text-purple-800 border-purple-200";
+      case "Report": return "bg-indigo-100 text-indigo-800 border-indigo-200"; // 券商研报/咨询报告
       case "Web": return "bg-cyan-100 text-cyan-800 border-cyan-200";
+      case "WeChat": return "bg-emerald-100 text-emerald-800 border-emerald-200"; // 微信公众号
       case "Other": return "bg-orange-100 text-orange-800 border-orange-200";
       case "Chart": return "bg-gray-100 text-gray-800 border-gray-200";
       default: return "bg-yellow-100 text-yellow-800 border-yellow-200";
