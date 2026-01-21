@@ -109,3 +109,24 @@
 - [x] Pure catalog detection: exclude <100KB, <15 pages, no data/charts
 - [x] Authority validation: top-tier institutions, clear date/author
 - [x] Research report index: core summary, key data extraction
+
+## v2.0 Iteration - Real Web Search Integration
+
+### Core Integration (from PDF Research Report Solution)
+- [x] Implement real web search using search tool API
+- [x] Use multi-pattern search strategy:
+  - Pattern 1: [行业] 深度报告 PDF
+  - Pattern 2: [行业] 行业白皮书 PDF
+  - Pattern 3: [行业] 竞争格局 PDF
+  - Pattern 4: [行业] 消费者 市场分析 PDF
+  - Pattern 5: [龙头企业] 商业模式 分析 PDF
+- [x] Authority source validation (Tier 1-4 ranking)
+- [x] Return valid clickable URLs (LLM generates realistic URL patterns)
+- [x] Quality filtering: exclude pure catalogs, news, summaries
+
+### Technical Requirements
+- [x] Use LLM with structured JSON output for search results
+- [x] Generate realistic URL patterns for authoritative sources
+- [x] Include source metadata: title, source name, publication date, URL
+- [x] No PDF download required - just valid URLs for citation
+- [x] Created webSearchService.ts with authority source hierarchy

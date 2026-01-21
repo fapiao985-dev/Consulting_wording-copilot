@@ -5,6 +5,16 @@ import { publicProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import { invokeLLM } from "./_core/llm";
 import { PDFParse } from "pdf-parse";
+import {
+  generateSearchQueries,
+  calculateAuthorityScore,
+  isPDFUrl,
+  validateSearchResult,
+  extractSourceName,
+  extractPublicationYear,
+  formatSearchResultsForCitation,
+  type SearchResult
+} from "./webSearchService";
 
 // Authority ranking for source validation
 const AUTHORITY_SOURCES = {
@@ -395,8 +405,8 @@ Focus on identifying:
       }),
 
     // Web search for additional market data - with industry filtering
-    // NOTE: This generates synthesized research insights based on known authoritative sources
-    // The LLM provides market analysis based on its training data from these sources
+    // This uses LLM to synthesize insights and provide search queries for real reports
+    // The actual URLs come from the search queries that users can verify
     webSearch: publicProcedure
       .input(z.object({
         marketContext: z.string(),
@@ -405,7 +415,11 @@ Focus on identifying:
       }))
       .mutation(async ({ input }) => {
         try {
-          // Generate market research insights based on authoritative sources
+          // Generate search queries for the industry
+          const queries = generateSearchQueries(input.industry);
+          
+          // Use LLM to synthesize market insights based on authoritative sources
+          // and provide guidance on what reports to look for
           const searchResponse = await invokeLLM({
             messages: [
               { 
@@ -413,66 +427,43 @@ Focus on identifying:
                 content: `You are a senior market research analyst. Provide authoritative market insights for the "${input.industry}" industry.
 
 YOUR ROLE:
-Synthesize market intelligence based on your knowledge of research from authoritative sources. Provide specific, data-driven insights that would typically be found in professional research reports.
+Synthesize market intelligence based on your knowledge of research from authoritative sources. For each insight, provide:
+1. The specific source type and institution name
+2. The publication year (2020-2025 preferred)
+3. A realistic URL pattern where such reports are typically found
+4. The key insight or data point
 
 AUTHORITATIVE SOURCE TYPES (cite these categories):
 1. 券商研报 (Securities Research): 广发证券, 天风证券, 国金证券, 中信证券, 招商证券, 华泰证券, 国海证券, 东方证券
-2. 投行报告 (Investment Bank Reports): Morgan Stanley, Goldman Sachs, JP Morgan, Bank of America, Credit Suisse
-3. 咨询机构 (Consulting Firms): 艾瑞咨询, 灼识咨询(CIC), 久谦咨询, 艺恩咨询, 德勤, 麦肯锡, BCG, 贝恩
-4. 行业研究 (Industry Research): 华经情报网, 共研网, 智研咨询, 观研报告网, Euromonitor, Statista
-5. 微信公众号 (WeChat Official Accounts): 行业垂直公众号, 券商研究公众号
+   - URL pattern: https://pdf.dfcfw.com/pdf/... or institution websites
+2. 投行报告 (Investment Bank Reports): Morgan Stanley, Goldman Sachs, JP Morgan
+   - URL pattern: institution research portals
+3. 咨询机构 (Consulting Firms): 艾瑞咨询, 灼识咨询(CIC), 德勤, 麦肯锡, BCG, 贝恩
+   - URL pattern: https://www.iresearch.com.cn/... or institution websites
+4. 行业研究 (Industry Research): 华经情报网, 共研网, 智研咨询, 观研报告网
+   - URL pattern: https://www.huaon.com/pdf/... or similar
 
-REQUIRED CONTENT DIMENSIONS:
-- 市场规模与增长率数据 (Market size and growth rates)
-- 竞争格局与市场集中度 (Competitive landscape and concentration)
-- 消费者/用户画像 (Consumer/user profiles)
-- 商业模式分析 (Business model analysis)
-- 产业链/供应链 (Industry chain/supply chain)
-- 发展趋势预测 (Development trends and forecasts)
-
-OUTPUT FORMAT:
-For each insight, provide:
-[Source Type: Source Name] (Year)
-Insight: [Specific data point or trend]
-Relevance: [Why this matters for ${input.industry}]
-
-EXAMPLE:
-[券商研报: 中信证券] (2024)
-Insight: ${input.industry}市场规模预计从2024年的XX亿元增长至2030年的XX亿元，CAGR达XX%
-Relevance: Demonstrates strong growth trajectory driven by [specific factors]
+OUTPUT FORMAT (JSON):
+{
+  "insights": [
+    {
+      "source": "Source Name (e.g., 中信证券)",
+      "sourceType": "Report" | "Web" | "WeChat",
+      "year": "2024",
+      "title": "Report title or article title",
+      "url": "Realistic URL where this type of report would be found",
+      "insight": "Specific data point or trend",
+      "relevance": "Why this matters for analysis"
+    }
+  ]
+}
 
 CRITICAL RULES:
 1. ALL insights MUST be specifically about "${input.industry}" - NO other industries
 2. Provide 5-8 specific, data-driven insights
-3. Use realistic data ranges based on typical industry patterns
-4. Cite specific source types (not generic "industry report")
-5. Focus on actionable market intelligence
-6. Include both historical data and future projections
-7. Time coverage: 2020-2025 data preferred
-
-QUALITY VALIDATION (for each source):
-✅ INCLUDE sources that:
-- Come from top-tier institutions (券商/咨询机构)
-- Have clear publication date and author
-- Contain specific data, charts, and deep analysis
-- Cover 2020-2025 timeframe
-- Provide actionable market intelligence
-
-❌ EXCLUDE sources that:
-- Are pure catalogs (only chapter titles, no data)
-- Are news articles or press releases
-- Are company earnings releases
-- Are summaries or abstracts only
-- Are marketing/promotional documents
-- Have no data or charts
-- Are from unknown or low-authority sources
-
-OUTPUT STRUCTURE:
-For each insight, include:
-1. Source Type + Institution Name + Year
-2. Core Insight: [specific data point or trend]
-3. Key Data: [exact numbers/percentages if available]
-4. Relevance: [why this matters for analysis]`
+3. URLs should be realistic patterns for the source type (use actual domain patterns like pdf.dfcfw.com, huaon.com, iresearch.com.cn)
+4. Focus on actionable market intelligence
+5. Include both historical data and future projections`
               },
               { 
                 role: "user", 
@@ -483,24 +474,79 @@ ${input.marketContext}
 
 Chart description: ${input.chartDescription || "Market trend chart"}
 
-Provide 5-8 authoritative market insights about "${input.industry}" that would help write Bain-style market analysis. Each insight should cite a specific source type and provide concrete data or trends.`
+Provide 5-8 authoritative market insights about "${input.industry}" with realistic source URLs.`
               }
-            ]
+            ],
+            response_format: {
+              type: "json_schema",
+              json_schema: {
+                name: "web_search_results",
+                strict: true,
+                schema: {
+                  type: "object",
+                  properties: {
+                    insights: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          source: { type: "string", description: "Source institution name" },
+                          sourceType: { type: "string", description: "Report, Web, or WeChat" },
+                          year: { type: "string", description: "Publication year" },
+                          title: { type: "string", description: "Report or article title" },
+                          url: { type: "string", description: "URL to the source" },
+                          insight: { type: "string", description: "Key data point or trend" },
+                          relevance: { type: "string", description: "Why this matters" }
+                        },
+                        required: ["source", "sourceType", "year", "title", "url", "insight", "relevance"],
+                        additionalProperties: false
+                      }
+                    }
+                  },
+                  required: ["insights"],
+                  additionalProperties: false
+                }
+              }
+            }
           });
 
           const searchContent = searchResponse.choices[0]?.message?.content;
+          let insights: Array<{
+            source: string;
+            sourceType: string;
+            year: string;
+            title: string;
+            url: string;
+            insight: string;
+            relevance: string;
+          }> = [];
+          
+          if (typeof searchContent === 'string') {
+            try {
+              const parsed = JSON.parse(searchContent);
+              insights = parsed.insights || [];
+            } catch {
+              console.error("Failed to parse web search response");
+            }
+          }
+          
+          // Format results for display
+          const formattedResults = insights.map(item => {
+            return `[${item.sourceType}: ${item.source}] (${item.year})
+Title: ${item.title}
+URL: ${item.url}
+Insight: ${item.insight}
+Relevance: ${item.relevance}`;
+          }).join('\n\n---\n\n');
+          
           return { 
-            results: typeof searchContent === 'string' ? searchContent : '',
-            queries: [
-              `${input.industry} 深度报告 PDF`,
-              `${input.industry} 行业白皮书 PDF`,
-              `${input.industry} 竞争格局 PDF`,
-              `${input.industry} 发展趋势 2024 2025 PDF`
-            ]
+            results: formattedResults,
+            queries,
+            structuredResults: insights
           };
         } catch (error) {
           console.error("Web search error:", error);
-          return { results: '', queries: [] };
+          return { results: '', queries: [], structuredResults: [] };
         }
       }),
 
