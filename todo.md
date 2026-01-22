@@ -245,3 +245,8 @@
 - [x] If no valid URLs available, show risk tag only (no broken links)
 - [x] Created urlVerification.ts with verifyUrl and filterValidUrls functions
 - [x] Integrated URL verification into webSearch mutation
+
+## v3.1.1 Hotfix - Remove Remaining "per boss feedback"
+
+- [x] Found remaining "per boss feedback" in routers.ts example wording
+- [x] Remove this non-client-ready language from example

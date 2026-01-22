@@ -793,7 +793,7 @@ Generate the Bain-style "Highlights" wording now. Remember:
   – Brand investment in high-grade positioning expected to continue through '24-'30E
 
 • Low-grade: Recovery post-inventory correction with growth accelerating in '24-'30E vs '19-'24
-  – Inventory overhang largely cleared by end of '24 per boss feedback
+  – Inventory overhang largely cleared by end of '24
   – Price war subsiding as supply-demand rebalances
 
 • Other products: Steady growth maintaining market share across both periods
