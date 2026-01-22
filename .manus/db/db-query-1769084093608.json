@@ -1,0 +1,13 @@
+{
+  "query": "SELECT DISTINCT industry FROM industry_reports;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2EAZY856c5gnGPj.root --database nFR2dhbajjs79BCzAWVDNL --execute SELECT DISTINCT industry FROM industry_reports;",
+  "rows": [
+    {
+      "industry": "Manuka Honey"
+    }
+  ],
+  "messages": [],
+  "stdout": "industry\nManuka Honey\n",
+  "stderr": "",
+  "execution_time_ms": 1498
+}

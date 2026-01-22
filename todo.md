@@ -264,3 +264,22 @@
 - [x] Encourage alternating between: '24-'30E, N6Y, "in the future", "going forward", L5Y
 - [x] Update examples in routers.ts to show variety (L5Y, "going forward", "in the future")
 - [x] Added VARIETY RULE to prompts: do not use same format repeatedly
+
+## v3.3 Iteration - Fix Framework Detection and Database Citation Bug (User Feedback - Jan 22)
+
+### Framework detection issues
+- [x] Fix framework selection logic: Framework MUST match chart visual breakdown, not inferred categories
+  - If chart shows total trend only (no breakdown) → use time-based framework
+  - If chart shows stacked bars with legend → use segment/category framework
+  - If chart shows waterfall with factors → use factor-based framework
+  - If chart shows channel breakdown → use channel-based framework
+  - Grade/segment can be mentioned as context, but cannot be used as L1 bullet structure if not visually broken down in chart
+- [x] Update LLM prompts with explicit framework decision rules based on chart structure hierarchy
+- [x] Add chart structure examples to guide framework selection
+
+### Database source citation bug
+- [x] Fix database query not returning results for "Manuka Honey" industry
+- [x] Investigate industry name matching logic (possible special character issue: "Mānuka" vs "Manuka")
+- [x] Add fuzzy matching or normalization for industry names
+- [ ] Add debug logging to track database query results
+- [ ] Verify database contains Manuka Honey reports (8 reports should exist)

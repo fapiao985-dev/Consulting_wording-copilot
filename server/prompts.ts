@@ -135,12 +135,47 @@ CONTENT RULES
 FRAMEWORK AUTO-DETECTION
 ================================
 
-18. FRAMEWORK SELECTION (agent decides based on chart)
-    - Analyze chart structure to determine best framework
-    - If chart shows clear segments/categories: use Pattern A (segment-based)
-    - If chart shows time series without segments: use Pattern B (time-based)
-    - If chart shows both segments and time evolution: use hybrid approach
-    - Framework choice MUST follow chart structure, not user preference
+18. FRAMEWORK SELECTION (chart structure determines framework)
+    
+    CRITICAL RULE: Framework MUST match the visual breakdown shown in the chart.
+    The chart's structure is the ONLY determinant - ignore inferred categories not visually broken down.
+    
+    DECISION TREE:
+    
+    A. SEGMENT/CATEGORY BREAKDOWN (stacked bars with legend)
+       → Use segment-based framework (Pattern A)
+       → L1 bullets organized by segment (e.g., Fresh milk, Ambient milk)
+       → Example: "China milk by category" chart with Fresh/Shelf-stable breakdown
+    
+    B. FACTOR BREAKDOWN (waterfall chart with labeled factors)
+       → Use factor-based framework
+       → L1 bullets organized by factors (e.g., Volume, ASP, Mix shift)
+       → Example: "Fresh milk growth drivers" with Volume/ASP breakdown
+    
+    C. CHANNEL BREAKDOWN (stacked bars by channel)
+       → Use channel-based framework
+       → L1 bullets organized by channel (e.g., BTS, Wholesale, Retail, Self-build)
+       → Example: "DC by sales channel" chart
+    
+    D. SERVICE/PRODUCT TYPE BREAKDOWN (stacked bars by type)
+       → Use type-based framework
+       → L1 bullets organized by service/product type
+       → Example: "Wukong TAM" with House renovation, Appliance cleaning, etc.
+    
+    E. KEY DRIVERS (numbered drivers in chart or sidebar)
+       → Use driver-based framework
+       → L1 bullets follow numbered structure (①, ②, ③, ④)
+       → Example: "Traction motor key drivers" with ① EV volume, ② Motor core per EV, ③ Tech mix shift, ④ LFL ASP
+    
+    F. TOTAL MARKET TREND ONLY (single bars, no breakdown)
+       → Use time-based framework (Pattern B)
+       → L1 bullets organized by time period (e.g., Pre-COVID, COVID, Post-COVID)
+       → Example: "Manuka Honey market size" showing total bars by year
+    
+    IMPORTANT DISTINCTIONS:
+    - If chart shows grade/segment as ANNOTATIONS (circles, labels) but NOT as stacked breakdown → use time-based framework, NOT grade-based
+    - Grade/segment can be MENTIONED as context in sub-bullets, but CANNOT be L1 bullet structure unless visually broken down
+    - Example: Manuka Honey chart has grade circles (①②③) but shows TOTAL bars → use time-based framework
 
 ================================
 SENTENCE STRUCTURE PATTERNS

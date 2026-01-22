@@ -200,7 +200,20 @@ export async function addIndustryReport(report: InsertIndustryReport): Promise<{
 }
 
 /**
+ * Normalize industry name for fuzzy matching
+ * Removes special characters and diacritics for better matching
+ */
+function normalizeIndustryName(name: string): string {
+  return name
+    .normalize('NFD') // Decompose characters with diacritics
+    .replace(/[\u0300-\u036f]/g, '') // Remove diacritics (ā → a)
+    .toLowerCase()
+    .trim();
+}
+
+/**
  * Get industry reports by industry name
+ * Supports fuzzy matching with normalization (e.g., "Mānuka" matches "Manuka")
  */
 export async function getIndustryReports(industry: string, limit = 20): Promise<IndustryReport[]> {
   const db = await getDb();
@@ -210,20 +223,24 @@ export async function getIndustryReports(industry: string, limit = 20): Promise<
   }
   
   try {
-    // Search by exact match or partial match
-    const results = await db
+    // Normalize input for better matching
+    const normalizedInput = normalizeIndustryName(industry);
+    
+    // Get all reports and filter in-memory for normalized matching
+    // This allows "Mānuka Honey" to match "Manuka Honey" in database
+    const allResults = await db
       .select()
       .from(industryReports)
-      .where(
-        and(
-          like(industryReports.industry, `%${industry}%`),
-          eq(industryReports.urlValidated, "valid")
-        )
-      )
-      .orderBy(desc(industryReports.createdAt))
-      .limit(limit);
+      .where(eq(industryReports.urlValidated, "valid"))
+      .orderBy(desc(industryReports.createdAt));
     
-    return results;
+    // Filter by normalized name matching
+    const filteredResults = allResults.filter(report => {
+      const normalizedDbName = normalizeIndustryName(report.industry);
+      return normalizedDbName.includes(normalizedInput) || normalizedInput.includes(normalizedDbName);
+    });
+    
+    return filteredResults.slice(0, limit);
   } catch (error) {
     console.error("[Database] Failed to get industry reports:", error);
     return [];

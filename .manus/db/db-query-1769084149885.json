@@ -1,0 +1,14 @@
+{
+  "query": "SELECT industry, COUNT(*) as count FROM industry_reports GROUP BY industry;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2EAZY856c5gnGPj.root --database nFR2dhbajjs79BCzAWVDNL --execute SELECT industry, COUNT(*) as count FROM industry_reports GROUP BY industry;",
+  "rows": [
+    {
+      "industry": "Manuka Honey",
+      "count": "8"
+    }
+  ],
+  "messages": [],
+  "stdout": "industry\tcount\nManuka Honey\t8\n",
+  "stderr": "",
+  "execution_time_ms": 1544
+}
