@@ -61,6 +61,9 @@ export default function Home() {
   const [extractionProgress, setExtractionProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState("");
   const [webSearchSource, setWebSearchSource] = useState<"database" | "llm" | null>(null); // Track source of web search results
+  const [evidenceStatus, setEvidenceStatus] = useState<"sufficient" | "limited" | null>(null);
+  const [riskTag, setRiskTag] = useState<string | null>(null);
+  const [verificationUrls, setVerificationUrls] = useState<string[]>([]);
 
   // tRPC mutations
   const generateWording = trpc.copilot.generateWording.useMutation();
@@ -262,8 +265,16 @@ export default function Home() {
       setExtractionProgress(100);
       setGeneratedWording(result.wording);
       setCitations(result.citations || []);
+      setEvidenceStatus(result.evidenceStatus || 'sufficient');
+      setRiskTag(result.riskTag || null);
+      setVerificationUrls(result.verificationUrls || []);
       setStep("output");
-      toast.success("Wording generated with source citations!");
+      
+      if (result.evidenceStatus === 'limited') {
+        toast.warning("Evidence is limited - verification URLs provided");
+      } else {
+        toast.success("Wording generated with source citations!");
+      }
     } catch (error) {
       toast.error("Failed to generate wording. Please try again.");
       console.error(error);
@@ -756,8 +767,52 @@ export default function Home() {
               </CardContent>
             </Card>
 
-            {/* Citations Card */}
-            {citations.length > 0 && (
+            {/* Evidence Metadata Card - Only show if evidence is limited */}
+            {evidenceStatus === 'limited' && (riskTag || verificationUrls.length > 0) && (
+              <Card className="border-yellow-500">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-yellow-700">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    Internal Risk Note
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {riskTag && (
+                    <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                      <p className="text-sm text-yellow-800">{riskTag}</p>
+                    </div>
+                  )}
+                  {verificationUrls.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium mb-2">Verification URLs (for consultant use only):</h4>
+                      <ul className="space-y-2">
+                        {verificationUrls.map((url, idx) => (
+                          <li key={idx}>
+                            <a 
+                              href={url} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-sm text-blue-600 hover:underline flex items-center gap-1"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              {url}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        These URLs provide general context for the inferred drivers. They are NOT cited sources.
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Citations Card - Only show if evidence is sufficient */}
+            {evidenceStatus === 'sufficient' && citations.length > 0 && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">

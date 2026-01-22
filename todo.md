@@ -22,7 +22,7 @@
 
 ## Known Issues (To Fix Later)
 
-- [ ] "By Time Period" framework output is incorrect - needs iteration
+- [x] "By Time Period" framework output is incorrect - needs iteration
 
 ## v1.3 Iteration - Fix PDF Citation Issue
 
@@ -182,3 +182,42 @@
 - [x] Anchor all claims to available evidence on the slide
 - [x] Avoid granular consumer/product insights unless clearly provided
 - [x] Use defensible, chart-anchored reasoning only
+
+## v3.0 Iteration - Refined Wording Principles (Precision Phase)
+
+### Non-negotiable principles
+- [x] Deck-ready wording: confident, answer-first, consulting-grade
+- [x] NO hedging language ("likely", "appears to", "suggests")
+- [x] Wording invariance: evidence sufficiency never affects wording itself
+- [x] Uncertainty communicated via metadata only, never through wording
+
+### Role boundary
+- [x] DO: Chart-based explanatory inference (identify plausible drivers)
+- [x] DO: Use consulting judgment to explain "what drove what"
+- [x] DON'T: Independent industry research introducing external facts
+- [x] DON'T: Strategy or structural analysis
+
+### Evidence hierarchy (for reasoning only)
+- [x] Chart: highest authority, single source of factual truth
+- [x] LT AF (Leadership Team Answer First): directional emphasis only
+- [x] Other sources (PDFs, expert calls): clarify/support chart-visible drivers
+
+### Analytical dimension usage
+- [x] Primary structure: anchored to chart-visible trends
+- [x] Secondary dimensions: explanatory lenses only, remain subordinate
+
+### Time & scope discipline
+- [x] Time horizon: historical-only charts get historical-only wording
+- [x] Time-period: don't group years with different drivers
+- [x] Skip years with no defensible explanation
+
+### Scope exclusions (hard rules)
+- [x] NO segmentation not shown in chart
+- [x] NO profitability/margin/pricing power discussion
+- [x] NO structural/long-term outlook beyond chart
+- [x] NO strategic recommendations
+
+### Evidence communication rules
+- [x] Sufficient evidence: include source references (NOT embedded in wording)
+- [x] Limited evidence: attach risk tag + 1-3 verification URLs
+- [x] Mutual exclusivity: EITHER sources OR (risk tag + URLs), never both, never neither

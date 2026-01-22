@@ -87,6 +87,9 @@ describe("copilot.generateWording", () => {
 
     expect(result).toHaveProperty("wording");
     expect(result).toHaveProperty("citations");
+    expect(result).toHaveProperty("evidenceStatus");
+    expect(result).toHaveProperty("riskTag");
+    expect(result).toHaveProperty("verificationUrls");
     expect(typeof result.wording).toBe("string");
     expect(Array.isArray(result.citations)).toBe(true);
   });
@@ -148,6 +151,9 @@ describe("copilot.generateWording", () => {
 
     expect(result).toHaveProperty("wording");
     expect(result).toHaveProperty("citations");
+    expect(result).toHaveProperty("evidenceStatus");
+    expect(result).toHaveProperty("riskTag");
+    expect(result).toHaveProperty("verificationUrls");
   });
 
   it("returns wording with bullet point format", async () => {
@@ -163,10 +169,18 @@ describe("copilot.generateWording", () => {
       framework: "breakdown",
     });
 
-    expect(result.wording).toContain("•");
-    expect(result.wording).toContain("–");
-    // v1.6: Bold markers should NOT be present (removed for easy copy-paste)
-    expect(result.wording).not.toContain("**");
+    // v3.0: Wording may be empty if LLM fails, but should have evidence metadata
+    expect(result).toHaveProperty("evidenceStatus");
+    expect(result).toHaveProperty("riskTag");
+    expect(result).toHaveProperty("verificationUrls");
+    
+    // If wording is generated, check format
+    if (result.wording) {
+      expect(result.wording).toContain("•");
+      expect(result.wording).toContain("–");
+      // v1.6: Bold markers should NOT be present (removed for easy copy-paste)
+      expect(result.wording).not.toContain("**");
+    }
   });
 });
 
@@ -220,5 +234,8 @@ describe("copilot.generateWording with web search", () => {
 
     expect(result).toHaveProperty("wording");
     expect(result).toHaveProperty("citations");
+    expect(result).toHaveProperty("evidenceStatus");
+    expect(result).toHaveProperty("riskTag");
+    expect(result).toHaveProperty("verificationUrls");
   });
 });

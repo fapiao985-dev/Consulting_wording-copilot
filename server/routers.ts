@@ -5,6 +5,7 @@ import { publicProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import { invokeLLM } from "./_core/llm";
 import { PDFParse } from "pdf-parse";
+import { BAIN_WORDING_SYSTEM_PROMPT_V3, SOURCE_CITATION_PROMPT_V3 } from "./prompts";
 import {
   generateSearchQueries,
   calculateAuthorityScore,
@@ -35,8 +36,8 @@ const AUTHORITY_SOURCES = {
   tier4_research: ["华经情报网", "共研网", "智研咨询", "观研报告网", "中国报告网", "Euromonitor", "Statista", "IBISWorld"]
 };
 
-// Bain-style wording prompt - updated with v1.7 fixes
-const BAIN_WORDING_SYSTEM_PROMPT = `You are a senior Bain & Company consultant. Generate slide wording in EXACT Bain style.
+// v2.2 prompt (kept for reference/rollback)
+const BAIN_WORDING_SYSTEM_PROMPT_V2 = `You are a senior Bain & Company consultant. Generate slide wording in EXACT Bain style.
 
 CRITICAL GRAMMAR RULES (BAIN STYLE):
 1. NO PERIODS at the end of sentences - sentences end without punctuation
@@ -144,7 +145,7 @@ BAIN LANGUAGE PATTERNS:
 - Use abbreviations: esp., e.g., p.a., L5Y, MS, vs.
 - Declarative, factual tone (not speculative)`;
 
-const SOURCE_CITATION_PROMPT = `You are a research analyst. Your task is to identify the SOURCE of each claim/driver in the wording.
+const SOURCE_CITATION_PROMPT_V2 = `You are a research analyst. Your task is to identify the SOURCE of each claim/driver in the wording.
 
 CRITICAL RULES:
 1. You MUST cite from the provided sources (Boss Comments, Expert Notes, PDF Reports, Other Materials, Web Search)
@@ -696,7 +697,7 @@ SUB-BULLET TIME ORDER: Historical ('19-'24) MUST come FIRST, then future ('24-'3
 
         // Step 1: Generate wording
         const wordingMessages: Array<{ role: "system" | "user" | "assistant"; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> }> = [
-          { role: "system", content: BAIN_WORDING_SYSTEM_PROMPT },
+          { role: "system", content: BAIN_WORDING_SYSTEM_PROMPT_V3 },
         ];
 
         if (input.chartImage && input.chartImage.startsWith("data:image")) {
@@ -738,12 +739,39 @@ Generate the Bain-style "Highlights" wording now. Remember:
         });
 
         let wording = "";
+        let evidenceStatus: "sufficient" | "limited" = "sufficient";
+        let riskTag: string | null = null;
+        let verificationUrls: string[] = [];
+        
         try {
           const wordingResponse = await invokeLLM({
             messages: wordingMessages as any,
+            response_format: {
+              type: "json_schema",
+              json_schema: {
+                name: "wording_output",
+                strict: true,
+                schema: {
+                  type: "object",
+                  properties: {
+                    wording: { type: "string" },
+                    evidence_status: { type: "string", enum: ["sufficient", "limited"] },
+                    risk_tag: { type: ["string", "null"] },
+                    verification_urls: { type: "array", items: { type: "string" } }
+                  },
+                  required: ["wording", "evidence_status"],
+                  additionalProperties: false
+                }
+              }
+            }
           });
           const rawContent = wordingResponse.choices[0]?.message?.content;
-          wording = typeof rawContent === 'string' ? rawContent : '';
+          const parsedResponse = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
+          
+          wording = parsedResponse.wording || '';
+          evidenceStatus = parsedResponse.evidence_status || 'sufficient';
+          riskTag = parsedResponse.risk_tag || null;
+          verificationUrls = parsedResponse.verification_urls || [];
           
           // Post-process: remove any ** bold markers
           wording = wording.replace(/\*\*/g, '');
@@ -780,7 +808,7 @@ Generate the Bain-style "Highlights" wording now. Remember:
 
         try {
           const citationMessages: Array<{ role: "system" | "user"; content: string }> = [
-            { role: "system", content: SOURCE_CITATION_PROMPT },
+            { role: "system", content: SOURCE_CITATION_PROMPT_V3 },
             { 
               role: "user", 
               content: `Here is the generated wording:\n\n${wording}\n\n---\n\nHere are ALL the sources that were provided (you MUST cite from these):\n\n${contextParts.join("\n\n---\n\n")}\n\n---\n\nAvailable source types: ${availableSources.join(", ")}${industryContext}\n\nFor each bullet point in the wording, identify which source(s) it came from. 
@@ -847,7 +875,13 @@ CRITICAL:
           // Return empty citations if generation fails
         }
 
-        return { wording, citations };
+        return { 
+          wording, 
+          citations,
+          evidenceStatus,
+          riskTag,
+          verificationUrls
+        };
       }),
   }),
 
