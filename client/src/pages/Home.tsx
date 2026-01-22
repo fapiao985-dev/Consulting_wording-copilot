@@ -43,7 +43,8 @@ export default function Home() {
   const [chartImage, setChartImage] = useState<File | null>(null);
   const [chartPreview, setChartPreview] = useState<string | null>(null);
   const [pdfFiles, setPdfFiles] = useState<PdfFile[]>([]);
-  const [framework, setFramework] = useState<Framework>("breakdown");
+  // Framework will be auto-detected by agent based on chart
+  const framework: Framework = "breakdown"; // Default, agent will override based on chart analysis
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [industry, setIndustry] = useState(""); // Industry input for source filtering
 
@@ -517,27 +518,6 @@ export default function Home() {
 
                 <Separator className="my-6" />
 
-                <div className="space-y-4">
-                  <Label>Framework Selection</Label>
-                  <Select value={framework} onValueChange={(v) => setFramework(v as Framework)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="breakdown">By Breakdown (Segment-based)</SelectItem>
-                      <SelectItem value="time">By Time Period</SelectItem>
-                      <SelectItem value="hybrid">Hybrid (Breakdown × Time)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    {framework === "breakdown" && "Organize bullets by market segments (e.g., Mass, Mid, Premium)"}
-                    {framework === "time" && "Organize bullets by time periods (e.g., '19-'24, '24-'29)"}
-                    {framework === "hybrid" && "Combine segment analysis with time-based evolution"}
-                  </p>
-                </div>
-
-                <Separator className="my-6" />
-
                 {/* Web Search Toggle */}
                 <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
                   <div className="flex items-center gap-3">
@@ -900,7 +880,7 @@ export default function Home() {
             {/* Footer */}
             <div className="flex items-center justify-between">
               <div className="text-sm text-muted-foreground">
-                <span className="font-medium">Format:</span> {framework === "breakdown" ? "By Segment" : framework === "time" ? "By Time" : "Hybrid"}
+                <span className="font-medium">Format:</span> Auto-detected from chart
                 {industry && (
                   <span className="ml-2">
                     <Building2 className="w-3 h-3 inline mr-1" />

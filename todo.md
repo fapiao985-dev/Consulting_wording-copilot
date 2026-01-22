@@ -221,3 +221,27 @@
 - [x] Sufficient evidence: include source references (NOT embedded in wording)
 - [x] Limited evidence: attach risk tag + 1-3 verification URLs
 - [x] Mutual exclusivity: EITHER sources OR (risk tag + URLs), never both, never neither
+
+## v3.1 Iteration - UX and Language Refinements
+
+### Auto framework selection
+- [x] Remove "Framework Selection" dropdown from UI
+- [x] Agent automatically determines framework based on chart structure
+- [x] Framework choice driven by chart content, not user selection
+- [x] Added framework auto-detection instruction to prompts.ts
+
+### Client-ready language
+- [x] Remove "per boss feedback" and similar non-client-ready phrases from prompts
+- [x] Ensure all generated wording is presentation-ready without internal references
+
+### Natural time expressions
+- [x] Replace rigid '24-'30 format with natural expressions
+- [x] Use "in the future", "over the next 6 years (N6Y)", "going forward"
+- [x] Maintain Bain style while being less mechanical
+
+### URL verification
+- [x] Only display URLs that have been validated (HTTP HEAD request)
+- [x] Remove all fake/generated URLs from output
+- [x] If no valid URLs available, show risk tag only (no broken links)
+- [x] Created urlVerification.ts with verifyUrl and filterValidUrls functions
+- [x] Integrated URL verification into webSearch mutation

@@ -27,6 +27,7 @@ import {
   getSourceTier,
   QUALITY_CRITERIA
 } from "./db";
+import { filterValidUrls } from "./urlVerification";
 
 // Authority ranking for source validation
 const AUTHORITY_SOURCES = {
@@ -602,8 +603,15 @@ Provide 5-8 authoritative market insights about "${input.industry}" with realist
             }
           }
           
-          // Format results for display
-          const formattedResults = insights.map(item => {
+          // STEP 3: Verify URLs before returning
+          const urlsToVerify = insights.map(i => i.url);
+          const validUrls = await filterValidUrls(urlsToVerify, 3000); // 3s timeout
+          
+          // Filter insights to only include those with valid URLs
+          const validInsights = insights.filter(i => validUrls.includes(i.url));
+          
+          // Format results for display (only valid URLs)
+          const formattedResults = validInsights.map(item => {
             return `[${item.sourceType}: ${item.source}] (${item.year})
 Title: ${item.title}
 URL: ${item.url}
@@ -614,9 +622,9 @@ Relevance: ${item.relevance}`;
           return { 
             results: formattedResults,
             queries,
-            structuredResults: insights.map(i => ({ ...i, fromDatabase: false })),
-            source: 'llm', // Indicate this is LLM-synthesized, URLs may not be valid
-            reportCount: insights.length,
+            structuredResults: validInsights.map(i => ({ ...i, fromDatabase: false })),
+            source: validInsights.length > 0 ? 'llm' : 'none', // Indicate if we have any valid results
+            reportCount: validInsights.length,
           };
         } catch (error) {
           console.error("Web search error:", error);

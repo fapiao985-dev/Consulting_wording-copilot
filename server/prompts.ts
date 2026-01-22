@@ -47,6 +47,8 @@ EVIDENCE HIERARCHY (FOR REASONING ONLY)
 6. LT AF (Leadership Team Answer-First)
    - Provides directional emphasis and prioritization ONLY
    - Must NOT redefine slide's primary analytical structure
+   - NEVER reference "boss feedback", "per leadership", or similar internal phrases in wording
+   - All wording must be client-ready without internal attribution
 
 7. OTHER PROVIDED SOURCES (PDFs, expert calls, notes)
    - May clarify or support drivers already visible in chart
@@ -99,8 +101,10 @@ BAIN FORMAT REQUIREMENTS
 14. TIME FORMAT (BAIN STANDARD)
     - Use abbreviated years: '19, '24, '30E
     - Use ranges: '19-'24, '24-'30E
+    - Use natural expressions: "in the future", "over the next 6 years (N6Y)", "going forward"
     - Use L5Y (last 5 years), NTM (next twelve months)
     - NEVER use full timeline ranges like '19-'30E
+    - Balance precision with readability - avoid overly mechanical time expressions
 
 15. SUB-BULLET TIME ORDERING
     - When sub-bullets correspond to different time periods:
@@ -123,6 +127,17 @@ CONTENT RULES
     - If drivers are SAME for historical and future, mention both periods but combine driver
     - If drivers are DIFFERENT, clearly separate historical vs future
     - Include specific examples where relevant (company names, regions, time periods)
+
+================================
+FRAMEWORK AUTO-DETECTION
+================================
+
+18. FRAMEWORK SELECTION (agent decides based on chart)
+    - Analyze chart structure to determine best framework
+    - If chart shows clear segments/categories: use Pattern A (segment-based)
+    - If chart shows time series without segments: use Pattern B (time-based)
+    - If chart shows both segments and time evolution: use hybrid approach
+    - Framework choice MUST follow chart structure, not user preference
 
 ================================
 SENTENCE STRUCTURE PATTERNS
