@@ -225,6 +225,7 @@ export async function getIndustryReports(industry: string, limit = 20): Promise<
   try {
     // Normalize input for better matching
     const normalizedInput = normalizeIndustryName(industry);
+    console.log('[getIndustryReports] Input:', industry, '→ Normalized:', normalizedInput);
     
     // Get all reports and filter in-memory for normalized matching
     // This allows "Mānuka Honey" to match "Manuka Honey" in database
@@ -237,9 +238,14 @@ export async function getIndustryReports(industry: string, limit = 20): Promise<
     // Filter by normalized name matching
     const filteredResults = allResults.filter(report => {
       const normalizedDbName = normalizeIndustryName(report.industry);
-      return normalizedDbName.includes(normalizedInput) || normalizedInput.includes(normalizedDbName);
+      const matches = normalizedDbName.includes(normalizedInput) || normalizedInput.includes(normalizedDbName);
+      if (matches) {
+        console.log('[getIndustryReports] Match found:', report.industry, '(normalized:', normalizedDbName, ')');
+      }
+      return matches;
     });
     
+    console.log('[getIndustryReports] Total results:', allResults.length, '→ Filtered:', filteredResults.length);
     return filteredResults.slice(0, limit);
   } catch (error) {
     console.error("[Database] Failed to get industry reports:", error);

@@ -283,3 +283,93 @@
 - [x] Add fuzzy matching or normalization for industry names
 - [ ] Add debug logging to track database query results
 - [ ] Verify database contains Manuka Honey reports (8 reports should exist)
+
+## v3.3.1 Fix - Enable Framework Auto-Detection (User Feedback - Jan 22)
+
+### Root cause identified
+- [ ] Problem: generateWording mutation uses user-provided framework parameter, overriding auto-detection rules in system prompt
+- [ ] Solution: Remove manual framework selection (方案 A)
+
+### Implementation tasks
+- [x] Remove framework parameter from generateWording mutation input schema
+- [x] Remove frameworkInstruction logic from routers.ts
+- [x] Remove framework selector UI from frontend (Home.tsx)
+- [x] Update frontend to not send framework parameter
+- [x] Rely entirely on system prompt's Framework Auto-Detection (prompts.ts line 138-178)
+
+### Testing
+- [ ] Test with Manuka Honey chart - should use time-based framework automatically
+- [ ] Test with China milk chart - should use segment-based framework automatically
+- [ ] Verify LLM follows Framework Decision Tree without explicit instruction
+
+## v3.3.2 Debug - Framework Auto-Detection Still Not Working
+
+### Problem identified from user test
+- [ ] LLM still uses grade-based framework (High-grade, Low-grade) instead of time-based
+- [ ] Sources still show "General Knowledge" instead of database reports
+- [ ] Root cause: System prompt alone is not enough - LLM ignores Framework Auto-Detection rules
+
+### New approach: Two-step generation
+- [ ] Step 1: Chart Analysis - Ask LLM to analyze chart structure and decide framework
+- [ ] Step 2: Wording Generation - Use the detected framework to generate wording
+- [ ] Add explicit chart structure analysis prompt before wording generation
+- [ ] Make framework detection a separate, explicit step with structured output
+
+## v3.4 - Implement 4-Step Workflow (User Requirements - Jan 22)
+
+### Workflow Overview
+1. Extract chart metadata (country + industry)
+2. Detect chart structure (total only / segment breakdown / factor breakdown / others)
+3. Generate wording based on detected structure
+4. Query database with fuzzy matching (already implemented)
+
+### Step 1: Extract Country + Industry
+- [x] Add LLM call to extract country and industry from chart title
+- [x] Examples: "China Milk Retail market", "China fresh-drink coffee market", "China cellphone retail volume"
+- [x] Return structured data: { country: string, industry: string }
+
+### Step 2: Detect Chart Structure
+- [x] Type 1: Total bar only (no breakdown) → time-based framework
+- [x] Type 2: Breakdown by segment/channel (stacked bars with legend) → segment-based framework
+  - Examples: shelf-stable milk vs fresh milk; retail vs wholesale; tier 1/2/3+ city
+- [x] Type 3: Breakdown by factor (waterfall: ASP × Volume) → factor-based framework
+  - MUST emphasize mix shift: even if LFL price/volume unchanged, expensive products selling more → market grows
+- [x] Type 4: Others (pending, fallback to time-based)
+
+### Step 3: Generate Wording Based on Structure
+**Type 1 (Total only):**
+- [x] L1 bullets by time-frame (select interesting periods, not all years)
+- [x] Example: Pre-COVID, COVID, Post-COVID
+
+**Type 2 (Segment/Channel breakdown):**
+- [x] L1 bullets by breakdown dimension (segment/channel/tier)
+- [x] L2 bullets can be: historical vs future, OR core drivers
+
+**Type 3 (Factor breakdown):**
+- [x] L1 bullets by factor (Volume, ASP, Mix shift)
+- [x] MUST include mix shift analysis
+- [x] Example: "Mix shift toward premium driving XX% growth despite flat LFL volume"
+
+### Step 4: Database Query (Already Implemented)
+- [x] Fuzzy matching with normalization
+- [x] Query database when Web Search enabled
+- [x] Cite reports in sources
+
+### Testing
+- [ ] Test with Manuka Honey chart (should detect Type 1 → time-based)
+- [ ] Test with China milk chart (should detect Type 2 → segment-based)
+- [ ] Verify database citations work correctly
+
+## v3.4.1 - Framework Instruction Enforcement (Critical Bug)
+
+### Problem
+- [x] Step 1 and Step 2 work correctly (detect total_only)
+- [x] Framework instruction generated correctly (time-based)
+- [ ] BUT: LLM ignores instruction and uses grade-based framework anyway
+- [ ] Root cause: LLM sees grade annotations in chart, overrides instruction
+
+### Solution
+- [x] Add explicit prohibition in framework instruction: "DO NOT use grades/segments"
+- [x] Add chart structure context before wording generation: "This chart shows TOTAL bars only, NOT segment breakdown"
+- [x] Strengthen instruction with CRITICAL markers
+- [x] Add negative examples: "WRONG: High-grade, Low-grade..."

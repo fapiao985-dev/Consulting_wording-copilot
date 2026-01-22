@@ -455,7 +455,9 @@ Focus on identifying:
       .mutation(async ({ input }) => {
         try {
           // STEP 1: Check database for pre-populated real URLs
+          console.log('[webSearch] Input industry:', input.industry);
           const dbReports = await getIndustryReports(input.industry, 10);
+          console.log('[webSearch] Database query returned:', dbReports.length, 'reports');
           
           if (dbReports.length > 0) {
             // We have real URLs from database - use these!
@@ -644,7 +646,7 @@ Relevance: ${item.relevance}`;
         }
       }),
 
-    // Generate wording with source citations - v1.7 updated
+    // Generate wording with source citations - v3.3.1: Framework auto-detection
     generateWording: publicProcedure
       .input(z.object({
         chartImage: z.string(),
@@ -655,7 +657,7 @@ Relevance: ${item.relevance}`;
         bossComments: z.string(),
         expertNotes: z.string(),
         otherMaterials: z.string(),
-        framework: z.enum(["breakdown", "time", "hybrid"]),
+        // framework parameter removed - LLM auto-detects from chart structure
         webSearchEnabled: z.boolean().optional(),
         webSearchResults: z.string().optional(),
         industry: z.string().optional(), // Optional industry for source validation
@@ -690,32 +692,128 @@ Relevance: ${item.relevance}`;
           availableSources.push("Web Search");
         }
 
-        const frameworkInstruction = input.framework === "breakdown" 
-          ? `Organize by SEGMENT using Pattern A:
-• [Segment Name]: [trend + reason in ONE complete sentence, NO semicolons]
-  – [Supporting detail]
-Each main bullet focuses on one segment (e.g., High-grade, Low-grade). Explain why each segment growing fast/slow.
-MUST cover BOTH historical ('19-'24) AND future ('24-'30E) trends SEPARATELY - never use '19-'30E.
-IMPORTANT: Since you have sub-bullets, the main bullet should be ONE complete sentence WITHOUT semicolons.
-SUB-BULLET TIME ORDER: If sub-bullets correspond to time periods, put historical ('19-'24) FIRST, then future ('24-'30E).`
-          : input.framework === "time"
-          ? `Organize by TIME PERIOD:
-• '19-'24: [what happened + why in ONE complete sentence]
-  – [Supporting detail]
-• '24-'30E: [outlook + drivers in ONE complete sentence]
-  – [Supporting detail]
-Each main bullet focuses on one time period. Explain what drove growth in each period.
-IMPORTANT: Since you have sub-bullets, the main bullet should be ONE complete sentence WITHOUT semicolons.
-MAIN BULLET ORDER: Historical period ('19-'24) FIRST, then future period ('24-'30E).`
-          : `Organize by SEGMENT × TIME:
-• [Segment Name]: [overall trend in ONE complete sentence]
-  – '19-'24: [historical trend + reason]
-  – '24-'30E: [future outlook + drivers]
-Each main bullet focuses on one segment, with sub-bullets showing its evolution over time.
-IMPORTANT: Since you have sub-bullets, the main bullet should be ONE complete sentence WITHOUT semicolons.
-SUB-BULLET TIME ORDER: Historical ('19-'24) MUST come FIRST, then future ('24-'30E).`;
+        // STEP 1: Extract country + industry from chart
+        let extractedCountry = "";
+        let extractedIndustry = "";
+        
+        if (input.chartImage && input.chartImage.startsWith("data:image")) {
+          try {
+            const metadataExtraction = await invokeLLM({
+              messages: [
+                {
+                  role: "system",
+                  content: `Extract the country and industry from the chart title. Return JSON with { "country": "...", "industry": "..." }.
 
-        // Step 1: Generate wording
+Examples:
+- "China Milk Retail market" → {"country": "China", "industry": "Milk Retail"}
+- "Greater China Mānuka Honey retail market size" → {"country": "Greater China", "industry": "Mānuka Honey"}
+- "China fresh-drink coffee market" → {"country": "China", "industry": "fresh-drink coffee"}
+- "China cellphone retail volume" → {"country": "China", "industry": "cellphone retail"}`
+                },
+                {
+                  role: "user",
+                  content: [
+                    { type: "text", text: "Extract country and industry from this chart:" },
+                    { type: "image_url", image_url: { url: input.chartImage } }
+                  ]
+                }
+              ],
+              response_format: {
+                type: "json_schema",
+                json_schema: {
+                  name: "metadata_extraction",
+                  strict: true,
+                  schema: {
+                    type: "object",
+                    properties: {
+                      country: { type: "string" },
+                      industry: { type: "string" }
+                    },
+                    required: ["country", "industry"],
+                    additionalProperties: false
+                  }
+                }
+              }
+            });
+            
+            const metadataContent = metadataExtraction.choices[0]?.message?.content;
+            const metadata = typeof metadataContent === 'string' ? JSON.parse(metadataContent) : metadataContent;
+            extractedCountry = metadata.country || "";
+            extractedIndustry = metadata.industry || "";
+            console.log('[Step 1] Extracted metadata:', { country: extractedCountry, industry: extractedIndustry });
+          } catch (error) {
+            console.error('[Step 1] Metadata extraction error:', error);
+          }
+        }
+
+        // STEP 2: Detect chart structure
+        let chartStructureType: "total_only" | "segment_breakdown" | "factor_breakdown" | "others" = "total_only";
+        let detectedBreakdown: string[] = [];
+        
+        if (input.chartImage && input.chartImage.startsWith("data:image")) {
+          try {
+            const structureDetection = await invokeLLM({
+              messages: [
+                {
+                  role: "system",
+                  content: `Analyze the chart structure and return JSON with { "type": "...", "breakdown": [...] }.
+
+TYPE DEFINITIONS:
+
+1. "total_only" - Chart shows only total bars per year, NO stacked breakdown
+   - Even if there are grade/segment ANNOTATIONS (circles, labels), if bars are NOT stacked → "total_only"
+   - breakdown: []
+
+2. "segment_breakdown" - Chart shows stacked bars with legend
+   - Examples: Fresh milk vs Shelf-stable milk; Retail vs Wholesale; Tier 1 vs Tier 2 vs Tier 3+ city
+   - breakdown: ["Fresh milk", "Shelf-stable milk"] or ["Retail", "Wholesale"] or ["Tier 1", "Tier 2", "Tier 3+"]
+
+3. "factor_breakdown" - Chart shows waterfall with factors (ASP, Volume, Mix)
+   - breakdown: ["Volume", "ASP", "Mix shift"]
+
+4. "others" - Any other structure
+   - breakdown: []
+
+CRITICAL: Distinguish between VISUAL breakdown (stacked bars) vs ANNOTATIONS (labels/circles). Only stacked bars count as breakdown.`
+                },
+                {
+                  role: "user",
+                  content: [
+                    { type: "text", text: "Detect chart structure:" },
+                    { type: "image_url", image_url: { url: input.chartImage } }
+                  ]
+                }
+              ],
+              response_format: {
+                type: "json_schema",
+                json_schema: {
+                  name: "structure_detection",
+                  strict: true,
+                  schema: {
+                    type: "object",
+                    properties: {
+                      type: { type: "string", enum: ["total_only", "segment_breakdown", "factor_breakdown", "others"] },
+                      breakdown: { type: "array", items: { type: "string" } }
+                    },
+                    required: ["type", "breakdown"],
+                    additionalProperties: false
+                  }
+                }
+              }
+            });
+            
+            const structureContent = structureDetection.choices[0]?.message?.content;
+            const structure = typeof structureContent === 'string' ? JSON.parse(structureContent) : structureContent;
+            chartStructureType = structure.type || "total_only";
+            detectedBreakdown = structure.breakdown || [];
+            console.log('[Step 2] Detected structure:', { type: chartStructureType, breakdown: detectedBreakdown });
+          } catch (error) {
+            console.error('[Step 2] Structure detection error:', error);
+            chartStructureType = "total_only"; // Fallback
+          }
+        }
+
+        // Step 2: Generate wording with detected framework
         const wordingMessages: Array<{ role: "system" | "user" | "assistant"; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> }> = [
           { role: "system", content: BAIN_WORDING_SYSTEM_PROMPT_V3 },
         ];
@@ -730,6 +828,16 @@ SUB-BULLET TIME ORDER: Historical ('19-'24) MUST come FIRST, then future ('24-'3
           });
         }
 
+        // Add chart structure detection result BEFORE research materials
+        wordingMessages.push({
+          role: "user",
+          content: `CHART STRUCTURE ANALYSIS:
+Detected type: ${chartStructureType}
+Breakdown: ${detectedBreakdown.length > 0 ? detectedBreakdown.join(", ") : "None"}
+
+This means: ${chartStructureType === "total_only" ? "The chart shows TOTAL bars only, with NO visual breakdown by segments. Any labels you see are annotations, not the chart structure." : chartStructureType === "segment_breakdown" ? `The chart has stacked bars showing breakdown by: ${detectedBreakdown.join(", ")}` : chartStructureType === "factor_breakdown" ? "The chart shows factor breakdown (Volume, ASP, Mix)" : "Other structure type"}`
+        });
+
         if (contextParts.length > 0) {
           wordingMessages.push({
             role: "user",
@@ -737,9 +845,65 @@ SUB-BULLET TIME ORDER: Historical ('19-'24) MUST come FIRST, then future ('24-'3
           });
         }
 
+        // STEP 3: Generate framework instruction based on detected structure
+        let frameworkInstruction = "";
+        
+        if (chartStructureType === "total_only" || chartStructureType === "others") {
+          // Type 1: Total only → time-based framework
+          frameworkInstruction = `CRITICAL: This chart shows TOTAL MARKET BARS ONLY. There is NO stacked breakdown by segment/grade/channel.
+
+Any grade labels (High-grade, Low-grade, etc.) are ANNOTATIONS only, NOT the chart structure.
+
+❌ WRONG APPROACH:
+• High-grade: ...
+• Low-grade: ...
+• Other products: ...
+
+✅ CORRECT APPROACH - Organize by TIME PERIOD:
+• Pre-COVID ('19-'21): [what happened + why in ONE complete sentence]
+  – [Supporting detail]
+• COVID ('21-'23): [what happened + why]
+  – [Supporting detail]
+• Post-COVID ('23-'24E): [outlook + drivers]
+  – [Supporting detail]
+
+MUST use time periods as L1 bullets. DO NOT use grades/segments as L1 bullets.
+Select interesting time periods (not all years) that have distinct market dynamics.`;
+        } else if (chartStructureType === "segment_breakdown") {
+          // Type 2: Segment breakdown → segment-based framework
+          const segments = detectedBreakdown.length > 0 ? detectedBreakdown.join(", ") : "segments shown in chart";
+          frameworkInstruction = `FRAMEWORK: Organize by SEGMENT/CHANNEL.
+
+Detected breakdown: ${segments}
+
+• [Segment Name]: [trend + reason in ONE complete sentence]
+  – [Historical trend ('19-'24) OR Core driver 1]
+  – [Future outlook ('24-'30E) OR Core driver 2]
+
+Each L1 bullet focuses on one segment/channel. L2 bullets can be:
+- Option A: Historical vs Future
+- Option B: Core drivers
+
+Choose the option that tells the best story based on available data.`;
+        } else if (chartStructureType === "factor_breakdown") {
+          // Type 3: Factor breakdown → factor-based framework
+          frameworkInstruction = `FRAMEWORK: Organize by FACTORS.
+
+• Volume: [impact + reason in ONE complete sentence]
+  – [Supporting detail]
+• ASP (Average Selling Price): [impact + reason]
+  – [Supporting detail]
+• Mix Shift: [impact + reason]
+  – [Supporting detail]
+
+IMPORTANT: Do NOT forget mix shift analysis!
+Even if like-for-like price and volume unchanged, if expensive products sell more → market grows.
+Example: "Mix shift toward premium driving XX% growth despite flat LFL volume"`;
+        }
+        
         wordingMessages.push({
           role: "user",
-          content: `Framework: ${frameworkInstruction}
+          content: `${frameworkInstruction}
 
 Generate the Bain-style "Highlights" wording now. Remember:
 - 3 main bullets (•)

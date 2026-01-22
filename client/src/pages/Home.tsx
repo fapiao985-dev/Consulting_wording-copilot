@@ -43,8 +43,7 @@ export default function Home() {
   const [chartImage, setChartImage] = useState<File | null>(null);
   const [chartPreview, setChartPreview] = useState<string | null>(null);
   const [pdfFiles, setPdfFiles] = useState<PdfFile[]>([]);
-  // Framework will be auto-detected by agent based on chart
-  const framework: Framework = "breakdown"; // Default, agent will override based on chart analysis
+  // Framework auto-detected by LLM based on chart structure (no manual selection)
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [industry, setIndustry] = useState(""); // Industry input for source filtering
 
@@ -257,7 +256,6 @@ export default function Home() {
         bossComments,
         expertNotes,
         otherMaterials,
-        framework,
         webSearchEnabled,
         webSearchResults,
         industry: industry.trim() || undefined,
@@ -346,7 +344,6 @@ export default function Home() {
         bossComments,
         expertNotes,
         otherMaterials,
-        framework,
         webSearchEnabled,
         webSearchResults,
         industry: industry.trim() || undefined,
