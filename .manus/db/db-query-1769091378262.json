@@ -1,0 +1,13 @@
+{
+  "query": "SELECT COUNT(*) as count FROM industry_reports WHERE industry LIKE '%anuka%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2EAZY856c5gnGPj.root --database nFR2dhbajjs79BCzAWVDNL --execute SELECT COUNT(*) as count FROM industry_reports WHERE industry LIKE '%anuka%';",
+  "rows": [
+    {
+      "count": "8"
+    }
+  ],
+  "messages": [],
+  "stdout": "count\n8\n",
+  "stderr": "",
+  "execution_time_ms": 1718
+}

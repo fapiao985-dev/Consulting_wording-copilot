@@ -1,0 +1,8 @@
+{
+  "query": "SELECT industry, title, source_name, publication_year FROM industry_reports WHERE industry LIKE '%anuka%' LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2EAZY856c5gnGPj.root --database nFR2dhbajjs79BCzAWVDNL --execute SELECT industry, title, source_name, publication_year FROM industry_reports WHERE industry LIKE '%anuka%' LIMIT 10;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'source_name' in 'field list'"
+  ]
+}

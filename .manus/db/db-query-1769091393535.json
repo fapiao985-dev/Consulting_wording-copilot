@@ -1,0 +1,58 @@
+{
+  "query": "SELECT industry, title, sourceName, publicationYear FROM industry_reports WHERE industry LIKE '%anuka%' LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2EAZY856c5gnGPj.root --database nFR2dhbajjs79BCzAWVDNL --execute SELECT industry, title, sourceName, publicationYear FROM industry_reports WHERE industry LIKE '%anuka%' LIMIT 10;",
+  "rows": [
+    {
+      "industry": "Manuka Honey",
+      "title": "Manuka Honey Market Size, Share | Industry Demand [2032]",
+      "sourceName": "Fortune Business Insights",
+      "publicationYear": "2026"
+    },
+    {
+      "industry": "Manuka Honey",
+      "title": "Manuka Honey Market Size, Share & Trends Report 2033",
+      "sourceName": "IMARC Group",
+      "publicationYear": "2025"
+    },
+    {
+      "industry": "Manuka Honey",
+      "title": "Manuka Honey Market Analysis, Size, and Forecast 2025-2029",
+      "sourceName": "Technavio",
+      "publicationYear": "2025"
+    },
+    {
+      "industry": "Manuka Honey",
+      "title": "Manuka Honey Market Set to Generate $776.4 Million by 2031",
+      "sourceName": "Allied Market Research",
+      "publicationYear": "2024"
+    },
+    {
+      "industry": "Manuka Honey",
+      "title": "NZ Honey Strategy 2024-2030 (Thriving Together)",
+      "sourceName": "Apiculture New Zealand",
+      "publicationYear": "2024"
+    },
+    {
+      "industry": "Manuka Honey",
+      "title": "2024-2030年全球与中国麦卢卡蜂蜜市场调查与市场分析",
+      "sourceName": "共研网",
+      "publicationYear": "2024"
+    },
+    {
+      "industry": "Manuka Honey",
+      "title": "全球与中国麦卢卡蜂蜜行业市场调查研究及发展前景预测报告（2022年版）",
+      "sourceName": "观研报告网",
+      "publicationYear": "2022"
+    },
+    {
+      "industry": "Manuka Honey",
+      "title": "海纳集成第二十期新西兰麦卢卡蜂蜜（Mānuka Honey）产业分析",
+      "sourceName": "福建省林业局",
+      "publicationYear": "2025"
+    }
+  ],
+  "messages": [],
+  "stdout": "industry\ttitle\tsourceName\tpublicationYear\nManuka Honey\tManuka Honey Market Size, Share | Industry Demand [2032]\tFortune Business Insights\t2026\nManuka Honey\tManuka Honey Market Size, Share & Trends Report 2033\tIMARC Group\t2025\nManuka Honey\tManuka Honey Market Analysis, Size, and Forecast 2025-2029\tTechnavio\t2025\nManuka Honey\tManuka Honey Market Set to Generate $776.4 Million by 2031\tAllied Market Research\t2024\nManuka Honey\tNZ Honey Strategy 2024-2030 (Thriving Together)\tApiculture New Zealand\t2024\nManuka Honey\t2024-2030年全球与中国麦卢卡蜂蜜市场调查与市场分析\t共研网\t2024\nManuka Honey\t全球与中国麦卢卡蜂蜜行业市场调查研究及发展前景预测报告（2022年版）\t观研报告网\t2022\nManuka Honey\t海纳集成第二十期新西兰麦卢卡蜂蜜（Mānuka Honey）产业分析\t福建省林业局\t2025\n",
+  "stderr": "",
+  "execution_time_ms": 1518
+}

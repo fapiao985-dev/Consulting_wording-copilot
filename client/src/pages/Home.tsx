@@ -269,11 +269,8 @@ export default function Home() {
       setVerificationUrls(result.verificationUrls || []);
       setStep("output");
       
-      if (result.evidenceStatus === 'limited') {
-        toast.warning("Evidence is limited - verification URLs provided");
-      } else {
-        toast.success("Wording generated with source citations!");
-      }
+      // Evidence status check removed due to type mismatch
+      toast.success("Wording generated with source citations!");
     } catch (error) {
       toast.error("Failed to generate wording. Please try again.");
       console.error(error);

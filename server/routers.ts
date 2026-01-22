@@ -818,8 +818,11 @@ CRITICAL: Distinguish between VISUAL breakdown (stacked bars) vs ANNOTATIONS (la
           { role: "system", content: BAIN_WORDING_SYSTEM_PROMPT_V3 },
         ];
 
+        // Build comprehensive user message content
+        let userMessageTextParts: string[] = [];
+        
         if (input.chartImage && input.chartImage.startsWith("data:image")) {
-          // Build chart analysis text with structure detection result
+          // Part 1: Chart structure analysis
           const structureExplanation = chartStructureType === "total_only" 
             ? "The chart shows TOTAL bars only, with NO visual breakdown by segments. Any labels you see are annotations, not the chart structure."
             : chartStructureType === "segment_breakdown" 
@@ -828,32 +831,21 @@ CRITICAL: Distinguish between VISUAL breakdown (stacked bars) vs ANNOTATIONS (la
             ? "The chart shows factor breakdown (Volume, ASP, Mix)"
             : "Other structure type";
           
-          wordingMessages.push({
-            role: "user",
-            content: [
-              { 
-                type: "text", 
-                text: `CHART STRUCTURE ANALYSIS:
+          userMessageTextParts.push(`CHART STRUCTURE ANALYSIS:
 Detected type: ${chartStructureType}
 Breakdown: ${detectedBreakdown.length > 0 ? detectedBreakdown.join(", ") : "None"}
 
 This means: ${structureExplanation}
 
-Analyze this market chart. Identify which segments are growing faster/slower. DO NOT repeat any numbers from this chart in your output:` 
-              },
-              { type: "image_url", image_url: { url: input.chartImage } }
-            ]
-          });
+Analyze this market chart. Identify which segments are growing faster/slower. DO NOT repeat any numbers from this chart in your output.`);
         }
-
+        
+        // Part 2: Research materials
         if (contextParts.length > 0) {
-          wordingMessages.push({
-            role: "user",
-            content: `IMPORTANT: Use insights from these research materials to write the wording. Do NOT rely on general knowledge - base your analysis on these specific sources:\n\n${contextParts.join("\n\n---\n\n")}`
-          });
+          userMessageTextParts.push(`\n\n---\n\nIMPORTANT: Use insights from these research materials to write the wording. Do NOT rely on general knowledge - base your analysis on these specific sources:\n\n${contextParts.join("\n\n---\n\n")}`);
         }
 
-        // STEP 3: Generate framework instruction based on detected structure
+        // Part 3: Generate framework instruction based on detected structure
         let frameworkInstruction = "";
         
         if (chartStructureType === "total_only" || chartStructureType === "others") {
@@ -909,11 +901,8 @@ Even if like-for-like price and volume unchanged, if expensive products sell mor
 Example: "Mix shift toward premium driving XX% growth despite flat LFL volume"`;
         }
         
-        wordingMessages.push({
-          role: "user",
-          content: `${frameworkInstruction}
-
-Generate the Bain-style "Highlights" wording now. Remember:
+        // Add framework instruction to text parts
+        userMessageTextParts.push(`\n\n---\n\n${frameworkInstruction}\n\nGenerate the Bain-style "Highlights" wording now. Remember:
 - 3 main bullets (•)
 - 1-2 sub-bullets (–) per main bullet
 - 80-120 words total
@@ -927,8 +916,23 @@ Generate the Bain-style "Highlights" wording now. Remember:
 - NO SEMICOLONS in main bullets when sub-bullets exist - write one complete sentence
 - Focus on WHY, not WHAT
 - Cover BOTH historical AND future trends SEPARATELY
-- BASE YOUR ANALYSIS ON THE PROVIDED RESEARCH MATERIALS`
-        });
+- BASE YOUR ANALYSIS ON THE PROVIDED RESEARCH MATERIALS`);
+        
+        // Push single combined user message
+        if (input.chartImage && input.chartImage.startsWith("data:image")) {
+          wordingMessages.push({
+            role: "user",
+            content: [
+              { type: "text", text: userMessageTextParts.join("") },
+              { type: "image_url", image_url: { url: input.chartImage } }
+            ]
+          });
+        } else {
+          wordingMessages.push({
+            role: "user",
+            content: userMessageTextParts.join("")
+          });
+        }
 
         let wording = "";
         let evidenceStatus: "sufficient" | "limited" = "sufficient";
@@ -936,34 +940,56 @@ Generate the Bain-style "Highlights" wording now. Remember:
         let verificationUrls: string[] = [];
         
         try {
+          console.log('[Wording Generation] Sending request with', wordingMessages.length, 'messages');
+          console.log('[Wording Generation] Message structure:', wordingMessages.map((m, i) => ({
+            index: i,
+            role: m.role,
+            contentType: typeof m.content,
+            isArray: Array.isArray(m.content),
+            contentLength: typeof m.content === 'string' ? m.content.length : m.content.length
+          })));
           const wordingResponse = await invokeLLM({
-            messages: wordingMessages as any,
-            response_format: {
-              type: "json_schema",
-              json_schema: {
-                name: "wording_output",
-                strict: true,
-                schema: {
-                  type: "object",
-                  properties: {
-                    wording: { type: "string" },
-                    evidence_status: { type: "string", enum: ["sufficient", "limited"] },
-                    risk_tag: { type: ["string", "null"] },
-                    verification_urls: { type: "array", items: { type: "string" } }
-                  },
-                  required: ["wording", "evidence_status"],
-                  additionalProperties: false
-                }
-              }
-            }
+            messages: wordingMessages as any
+            // Removed response_format to test compatibility with multimodal content
           });
+          console.log('[Wording Generation] Response received:', JSON.stringify({
+            hasChoices: !!wordingResponse.choices,
+            choicesLength: wordingResponse.choices?.length,
+            firstChoice: wordingResponse.choices?.[0] ? 'exists' : 'missing'
+          }));
           const rawContent = wordingResponse.choices[0]?.message?.content;
-          const parsedResponse = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
+          console.log('[Wording Generation] Raw content:', typeof rawContent === 'string' ? rawContent.substring(0, 500) : rawContent);
           
-          wording = parsedResponse.wording || '';
-          evidenceStatus = parsedResponse.evidence_status || 'sufficient';
-          riskTag = parsedResponse.risk_tag || null;
-          verificationUrls = parsedResponse.verification_urls || [];
+          // Parse JSON response (may be wrapped in markdown code fence)
+          if (typeof rawContent === 'string') {
+            let jsonStr = rawContent.trim();
+            // Remove markdown code fence if present
+            if (jsonStr.startsWith('```json')) {
+              jsonStr = jsonStr.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+            } else if (jsonStr.startsWith('```')) {
+              jsonStr = jsonStr.replace(/^```\s*/, '').replace(/\s*```$/, '');
+            }
+            
+            try {
+              const parsed = JSON.parse(jsonStr);
+              wording = parsed.wording || '';
+              evidenceStatus = parsed.evidence_status || 'sufficient';
+              riskTag = parsed.risk_tag || null;
+              verificationUrls = parsed.verification_urls || [];
+            } catch (e) {
+              // Fallback: treat as plain text if JSON parsing fails
+              console.error('[Wording Generation] JSON parse error:', e);
+              wording = rawContent;
+              evidenceStatus = 'sufficient';
+              riskTag = null;
+              verificationUrls = [];
+            }
+          } else {
+            wording = '';
+            evidenceStatus = 'sufficient';
+            riskTag = null;
+            verificationUrls = [];
+          }
           
           // Post-process: remove any ** bold markers
           wording = wording.replace(/\*\*/g, '');

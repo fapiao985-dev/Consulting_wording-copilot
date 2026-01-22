@@ -373,3 +373,24 @@
 - [x] Add chart structure context before wording generation: "This chart shows TOTAL bars only, NOT segment breakdown"
 - [x] Strengthen instruction with CRITICAL markers
 - [x] Add negative examples: "WRONG: High-grade, Low-grade..."
+
+## v3.5 - Fix JSON Parsing and Framework Structure (Jan 22)
+
+### Issue 1: JSON Parsing
+- [x] LLM returns JSON wrapped in markdown code fence: ```json\n{...}\n```
+- [x] Frontend displays raw JSON text instead of parsed wording
+- [x] Need to strip markdown code fences before parsing
+
+### Issue 2: Framework Structure Not Enforced
+- [x] LLM returns single long bullet instead of 3 separate L1 bullets
+- [x] No clear time-based separation (Pre-COVID, COVID, Post-COVID)
+- [x] Missing sub-bullets structure
+- [x] Need to add explicit structure requirements to framework instruction
+
+### Solution
+- [x] Add JSON parsing logic to handle markdown code fences
+- [x] Strengthen time-based framework instruction with explicit examples
+- [x] Add structure validation to ensure 3 L1 bullets with sub-bullets
+- [x] Added STRUCTURE REQUIREMENTS section with correct/wrong examples
+- [x] Emphasized 2-3 separate L1 bullets with mandatory sub-bullets
+- [x] Added Manuka Honey example showing correct time-based structure

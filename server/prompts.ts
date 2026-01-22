@@ -171,6 +171,41 @@ FRAMEWORK AUTO-DETECTION
        → Use time-based framework (Pattern B)
        → L1 bullets organized by time period (e.g., Pre-COVID, COVID, Post-COVID)
        → Example: "Manuka Honey market size" showing total bars by year
+       
+       STRUCTURE REQUIREMENTS FOR TIME-BASED FRAMEWORK:
+       - MUST have 2-3 separate L1 bullets (•), each representing a distinct time period
+       - Each L1 bullet: one complete sentence describing the trend + key driver for that period
+       - Each L1 bullet MUST have 1-2 sub-bullets (–) providing supporting details
+       - DO NOT combine all periods into one long bullet
+       - DO NOT write single-line bullets without sub-bullets
+       
+       CORRECT STRUCTURE:
+       • [Time Period 1]: [Trend statement with key driver]
+         – [Supporting detail 1]
+         – [Supporting detail 2]
+       • [Time Period 2]: [Trend statement with key driver]
+         – [Supporting detail]
+       • [Time Period 3]: [Trend statement with key driver]
+         – [Supporting detail]
+       
+       EXAMPLE (Manuka Honey):
+       • COVID significantly impacted the market during '20-'22 as lockdowns disrupted retail channels and cross-border e-commerce
+         – Physical store closures reduced premium product visibility and trial opportunities
+         – Supply chain delays increased costs and limited product availability
+       • In '21 the market saw rapid growth driven by health consciousness surge and premiumization toward UMF20+ products
+         – Consumers prioritized immunity-boosting products during pandemic
+         – High-grade Manuka commanded price premiums as wellness trend accelerated
+       • The market saw slow recovery in '23-'24 as consumer spending normalized post-pandemic
+         – Economic headwinds reduced discretionary spending on premium health products
+         – Competition from alternative wellness products intensified
+       
+       WRONG STRUCTURE (DO NOT DO THIS):
+       • The market experienced volatility from '19-'24E driven by COVID disruptions, health consciousness surge, and post-pandemic normalization with lockdowns impacting retail, premiumization driving growth, and economic headwinds slowing recovery
+       
+       WHY THIS IS WRONG:
+       - Single long bullet combines all periods (no time-based separation)
+       - No sub-bullets (missing supporting details)
+       - Unclear which driver applies to which period
     
     IMPORTANT DISTINCTIONS:
     - If chart shows grade/segment as ANNOTATIONS (circles, labels) but NOT as stacked breakdown → use time-based framework, NOT grade-based
