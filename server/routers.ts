@@ -610,6 +610,18 @@ Provide 5-8 authoritative market insights about "${input.industry}" with realist
           // Filter insights to only include those with valid URLs
           const validInsights = insights.filter(i => validUrls.includes(i.url));
           
+          // If no valid URLs found, return empty results with message
+          if (validInsights.length === 0) {
+            return {
+              results: '',
+              queries,
+              structuredResults: [],
+              source: 'none',
+              reportCount: 0,
+              message: `No authoritative sources found in database for "${input.industry}". Please ask Manus to search and populate reports for this industry.`
+            };
+          }
+          
           // Format results for display (only valid URLs)
           const formattedResults = validInsights.map(item => {
             return `[${item.sourceType}: ${item.source}] (${item.year})
@@ -623,7 +635,7 @@ Relevance: ${item.relevance}`;
             results: formattedResults,
             queries,
             structuredResults: validInsights.map(i => ({ ...i, fromDatabase: false })),
-            source: validInsights.length > 0 ? 'llm' : 'none', // Indicate if we have any valid results
+            source: 'llm',
             reportCount: validInsights.length,
           };
         } catch (error) {
@@ -789,10 +801,10 @@ Generate the Bain-style "Highlights" wording now. Remember:
         } catch (error) {
           console.error("Wording generation error:", error);
           wording = `• High-grade: Outgrowing overall market driven by super-high grade new product launches and ASP uplift from premiumization
-  – New UMF20+ products commanding price premium, attracting health-conscious consumers in '19-'24
-  – Brand investment in high-grade positioning expected to continue through '24-'30E
+  – New UMF20+ products commanding price premium, attracting health-conscious consumers over L5Y
+  – Brand investment in high-grade positioning expected to continue momentum going forward
 
-• Low-grade: Recovery post-inventory correction with growth accelerating in '24-'30E vs '19-'24
+• Low-grade: Recovery post-inventory correction with growth accelerating in the future vs historical period
   – Inventory overhang largely cleared by end of '24
   – Price war subsiding as supply-demand rebalances
 

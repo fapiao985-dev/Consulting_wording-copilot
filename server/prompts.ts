@@ -98,13 +98,16 @@ BAIN FORMAT REQUIREMENTS
     - NO asterisks (**) for bold - plain text only
     - SEMICOLON RULE: If main bullet (•) has sub-bullets, write ONE COMPLETE SENTENCE without semicolons
 
-14. TIME FORMAT (BAIN STANDARD)
-    - Use abbreviated years: '19, '24, '30E
-    - Use ranges: '19-'24, '24-'30E
-    - Use natural expressions: "in the future", "over the next 6 years (N6Y)", "going forward"
-    - Use L5Y (last 5 years), NTM (next twelve months)
-    - NEVER use full timeline ranges like '19-'30E
-    - Balance precision with readability - avoid overly mechanical time expressions
+14. TIME FORMAT (BAIN STANDARD - USE VARIETY)
+    - ALTERNATE between multiple styles within the same wording to avoid repetition:
+      * Abbreviated years: '19, '24, '30E
+      * Ranges: '19-'24, '24-'30E
+      * Natural expressions: "in the future", "over the next 6 years (N6Y)", "going forward"
+      * Shorthand: L5Y (last 5 years), NTM (next twelve months)
+    - VARIETY RULE: Do NOT use the same time format repeatedly in one wording
+    - Example: If first bullet uses '19-'24, second bullet should use "in the future" or "N6Y"
+    - NEVER use full timeline ranges like '19-'30E (spans entire chart, provides no insight)
+    - Balance precision with readability - mix precise ranges with natural language
 
 15. SUB-BULLET TIME ORDERING
     - When sub-bullets correspond to different time periods:

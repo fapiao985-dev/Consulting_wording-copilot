@@ -250,3 +250,17 @@
 
 - [x] Found remaining "per boss feedback" in routers.ts example wording
 - [x] Remove this non-client-ready language from example
+
+## v3.2 Iteration - Fix URL Verification and Diversify Time Expressions
+
+### Fix URL verification
+- [x] Remove fake URLs from LLM fallback when database has no results
+- [x] Show "No authoritative sources found" message instead of fake URLs
+- [x] Only display URLs that have been validated or are from database
+- [x] Added message field to webSearch response when no valid URLs found
+
+### Diversify time format expressions
+- [x] Update prompts to allow multiple time expression styles
+- [x] Encourage alternating between: '24-'30E, N6Y, "in the future", "going forward", L5Y
+- [x] Update examples in routers.ts to show variety (L5Y, "going forward", "in the future")
+- [x] Added VARIETY RULE to prompts: do not use same format repeatedly
