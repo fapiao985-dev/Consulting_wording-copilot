@@ -360,13 +360,13 @@
 - [ ] Test with China milk chart (should detect Type 2 → segment-based)
 - [ ] Verify database citations work correctly
 
-## v3.4.1 - Framework Instruction Enforcement (Critical Bug)
+## v3.4.1 - Framework Instruction Enforcement (Critical Bug) ✅ RESOLVED
 
 ### Problem
 - [x] Step 1 and Step 2 work correctly (detect total_only)
 - [x] Framework instruction generated correctly (time-based)
-- [ ] BUT: LLM ignores instruction and uses grade-based framework anyway
-- [ ] Root cause: LLM sees grade annotations in chart, overrides instruction
+- [x] BUT: LLM ignores instruction and uses grade-based framework anyway
+- [x] Root cause: Consecutive user messages caused API failure, returned empty response, triggered hardcoded fallback
 
 ### Solution
 - [x] Add explicit prohibition in framework instruction: "DO NOT use grades/segments"

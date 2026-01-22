@@ -819,24 +819,32 @@ CRITICAL: Distinguish between VISUAL breakdown (stacked bars) vs ANNOTATIONS (la
         ];
 
         if (input.chartImage && input.chartImage.startsWith("data:image")) {
+          // Build chart analysis text with structure detection result
+          const structureExplanation = chartStructureType === "total_only" 
+            ? "The chart shows TOTAL bars only, with NO visual breakdown by segments. Any labels you see are annotations, not the chart structure."
+            : chartStructureType === "segment_breakdown" 
+            ? `The chart has stacked bars showing breakdown by: ${detectedBreakdown.join(", ")}`
+            : chartStructureType === "factor_breakdown" 
+            ? "The chart shows factor breakdown (Volume, ASP, Mix)"
+            : "Other structure type";
+          
           wordingMessages.push({
             role: "user",
             content: [
-              { type: "text", text: "Analyze this market chart. Identify which segments are growing faster/slower. DO NOT repeat any numbers from this chart in your output:" },
+              { 
+                type: "text", 
+                text: `CHART STRUCTURE ANALYSIS:
+Detected type: ${chartStructureType}
+Breakdown: ${detectedBreakdown.length > 0 ? detectedBreakdown.join(", ") : "None"}
+
+This means: ${structureExplanation}
+
+Analyze this market chart. Identify which segments are growing faster/slower. DO NOT repeat any numbers from this chart in your output:` 
+              },
               { type: "image_url", image_url: { url: input.chartImage } }
             ]
           });
         }
-
-        // Add chart structure detection result BEFORE research materials
-        wordingMessages.push({
-          role: "user",
-          content: `CHART STRUCTURE ANALYSIS:
-Detected type: ${chartStructureType}
-Breakdown: ${detectedBreakdown.length > 0 ? detectedBreakdown.join(", ") : "None"}
-
-This means: ${chartStructureType === "total_only" ? "The chart shows TOTAL bars only, with NO visual breakdown by segments. Any labels you see are annotations, not the chart structure." : chartStructureType === "segment_breakdown" ? `The chart has stacked bars showing breakdown by: ${detectedBreakdown.join(", ")}` : chartStructureType === "factor_breakdown" ? "The chart shows factor breakdown (Volume, ASP, Mix)" : "Other structure type"}`
-        });
 
         if (contextParts.length > 0) {
           wordingMessages.push({
