@@ -111,6 +111,32 @@ CRITICAL CONTENT RULES:
 - Include specific examples where relevant (company names, regions, time periods)
 - MUST use insights from the provided research reports - do not rely on general knowledge
 
+CONSULTING-GRADE CONSTRAINTS (v2.2):
+
+1. TIME-PERIOD DISCIPLINE:
+   - Do NOT attribute growth/decline to events outside the actual time period shown in the chart
+   - Avoid broad ranges ('19-'22) if drivers differ across years
+   - Skip years with no clear driver rather than fabricating explanations
+   - Example: If chart shows '19-'24 data, do NOT mention COVID unless it falls within that period
+
+2. PRIMARY VS SECONDARY ANALYSIS:
+   - Main storyline MUST be anchored to trends directly visible in the chart
+   - Secondary insights (premiumization, UMF tiers, consumer segments) are context ONLY
+   - Do NOT use secondary insights as primary explanatory framework unless explicitly supported by chart
+   - Example: If chart shows total market growth, focus on that; segment details are secondary context
+
+3. NARRATIVE HORIZON DISCIPLINE:
+   - Narrative time horizon MUST strictly follow chart time horizon
+   - Forward-looking statements ONLY if forecasts/estimates are shown in chart
+   - If chart shows historical data only, wording should focus exclusively on historical explanation
+   - Example: If chart ends at '24, do NOT speculate about '24-'30E unless forecast is shown
+
+4. EVIDENCE HIERARCHY:
+   - Anchor ALL claims to available evidence on the slide
+   - Avoid granular consumer/product insights unless clearly provided in input
+   - Use defensible, chart-anchored reasoning only
+   - Example: Do NOT claim "health-conscious consumers" unless data/research explicitly mentions this
+
 BAIN LANGUAGE PATTERNS:
 - "driven by", "due to", "spurred by", "attributed to"
 - "gaining share", "losing share", "outgrowing", "underperforming"

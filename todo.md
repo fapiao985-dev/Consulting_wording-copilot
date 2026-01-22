@@ -160,3 +160,25 @@
 - [x] Display real URLs from pre-populated data
 - [x] Fallback to LLM if no database results (with warning)
 - [x] Add indicator showing data source (Database vs LLM) with badges
+
+## v2.2 Iteration - Consulting-Grade Wording Constraints
+
+### Time-period discipline
+- [x] Do not attribute growth/decline to events outside the actual time period shown
+- [x] Avoid broad ranges ('19-'22) if drivers differ across years
+- [x] Skip years with no clear driver rather than fabricating explanations
+
+### Primary vs Secondary analysis discipline
+- [x] Main storyline must be anchored to trends directly visible in the chart
+- [x] Secondary insights (premiumization, segments) are context only
+- [x] Do not use secondary insights as primary explanatory framework unless chart-supported
+
+### Narrative horizon discipline
+- [x] Narrative time horizon must strictly follow chart time horizon
+- [x] Forward-looking statements only if forecasts/estimates shown in chart
+- [x] Historical-only charts get historical-only wording
+
+### Evidence hierarchy
+- [x] Anchor all claims to available evidence on the slide
+- [x] Avoid granular consumer/product insights unless clearly provided
+- [x] Use defensible, chart-anchored reasoning only

@@ -1,0 +1,74 @@
+{
+  "query": "SELECT id, industry, sourceName, sourceTier, publicationYear, urlValidated FROM industry_reports WHERE industry = 'Manuka Honey' ORDER BY sourceTier ASC;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2EAZY856c5gnGPj.root --database nFR2dhbajjs79BCzAWVDNL --execute SELECT id, industry, sourceName, sourceTier, publicationYear, urlValidated FROM industry_reports WHERE industry = 'Manuka Honey' ORDER BY sourceTier ASC;",
+  "rows": [
+    {
+      "id": "5",
+      "industry": "Manuka Honey",
+      "sourceName": "Apiculture New Zealand",
+      "sourceTier": "1",
+      "publicationYear": "2024",
+      "urlValidated": "valid"
+    },
+    {
+      "id": "8",
+      "industry": "Manuka Honey",
+      "sourceName": "福建省林业局",
+      "sourceTier": "2",
+      "publicationYear": "2025",
+      "urlValidated": "valid"
+    },
+    {
+      "id": "1",
+      "industry": "Manuka Honey",
+      "sourceName": "Fortune Business Insights",
+      "sourceTier": "3",
+      "publicationYear": "2026",
+      "urlValidated": "valid"
+    },
+    {
+      "id": "2",
+      "industry": "Manuka Honey",
+      "sourceName": "IMARC Group",
+      "sourceTier": "3",
+      "publicationYear": "2025",
+      "urlValidated": "valid"
+    },
+    {
+      "id": "3",
+      "industry": "Manuka Honey",
+      "sourceName": "Technavio",
+      "sourceTier": "3",
+      "publicationYear": "2025",
+      "urlValidated": "valid"
+    },
+    {
+      "id": "4",
+      "industry": "Manuka Honey",
+      "sourceName": "Allied Market Research",
+      "sourceTier": "3",
+      "publicationYear": "2024",
+      "urlValidated": "valid"
+    },
+    {
+      "id": "6",
+      "industry": "Manuka Honey",
+      "sourceName": "共研网",
+      "sourceTier": "4",
+      "publicationYear": "2024",
+      "urlValidated": "valid"
+    },
+    {
+      "id": "7",
+      "industry": "Manuka Honey",
+      "sourceName": "观研报告网",
+      "sourceTier": "4",
+      "publicationYear": "2022",
+      "urlValidated": "valid"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tindustry\tsourceName\tsourceTier\tpublicationYear\turlValidated\n5\tManuka Honey\tApiculture New Zealand\t1\t2024\tvalid\n8\tManuka Honey\t福建省林业局\t2\t2025\tvalid\n1\tManuka Honey\tFortune Business Insights\t3\t2026\tvalid\n2\tManuka Honey\tIMARC Group\t3\t2025\tvalid\n3\tManuka Honey\tTechnavio\t3\t2025\tvalid\n4\tManuka Honey\tAllied Market Research\t3\t2024\tvalid\n6\tManuka Honey\t共研网\t4\t2024\tvalid\n7\tManuka Honey\t观研报告网\t4\t2022\tvalid\n",
+  "stderr": "",
+  "execution_time_ms": 1544
+}
