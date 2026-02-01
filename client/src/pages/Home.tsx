@@ -44,7 +44,7 @@ export default function Home() {
   const [chartPreview, setChartPreview] = useState<string | null>(null);
   const [pdfFiles, setPdfFiles] = useState<PdfFile[]>([]);
   // Framework auto-detected by LLM based on chart structure (no manual selection)
-  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [webSearchEnabled, setWebSearchEnabled] = useState(true);
   const [industry, setIndustry] = useState(""); // Industry input for source filtering
 
   // Chart title extraction states
@@ -442,6 +442,19 @@ export default function Home() {
                   className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
                     chartPreview ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
                   }`}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const file = e.dataTransfer.files?.[0];
+                    if (file && file.type.startsWith('image/')) {
+                      handleChartUpload({ target: { files: [file] } } as any);
+                    }
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                  }}
+                  onDragEnter={(e) => {
+                    e.preventDefault();
+                  }}
                 >
                   {chartPreview ? (
                     <div className="space-y-4">
@@ -576,7 +589,8 @@ export default function Home() {
                       <div className="space-y-2">
                         <Label>LT Comments</Label>
                         <Textarea
-                          placeholder="Enter leadership team's comments about the market trends..."
+                          placeholder="optional"
+                          className="italic"
                           value={bossComments}
                           onChange={(e) => setBossComments(e.target.value)}
                           rows={6}
@@ -650,7 +664,8 @@ export default function Home() {
                       <div className="space-y-2">
                         <Label>Expert Call Notes</Label>
                         <Textarea
-                          placeholder="Paste notes from expert interviews..."
+                          placeholder="optional"
+                          className="italic"
                           value={expertNotes}
                           onChange={(e) => setExpertNotes(e.target.value)}
                           rows={6}
@@ -665,7 +680,8 @@ export default function Home() {
                       <div className="space-y-2">
                         <Label>Other Materials</Label>
                         <Textarea
-                          placeholder="Any additional context or materials..."
+                          placeholder="optional"
+                          className="italic"
                           value={otherMaterials}
                           onChange={(e) => setOtherMaterials(e.target.value)}
                           rows={6}

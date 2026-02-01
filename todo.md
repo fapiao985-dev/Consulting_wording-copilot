@@ -422,3 +422,24 @@
 - [x] Remove dropdown for example, show directly
 - [x] Reduce example image size (max-w-xs)
 - [x] Update Industry Name placeholder to English: "e.g., fresh-made coffee, EV, etc."
+
+
+## v3.7 - Implement Drag and Drop for Chart Upload (Feb 1)
+
+### Issue
+- [x] UI text says "Drop your chart image here" but drag and drop is not implemented
+- [x] Only click-to-upload works, dragging files has no effect
+- [x] Missing onDrop, onDragOver, onDragEnter, onDragLeave handlers
+
+### Solution
+- [x] Add drag and drop event handlers to chart upload div
+- [x] Reuse existing handleChartUpload logic for dropped files
+- [x] Add visual feedback during drag (hover state already exists in className)
+
+
+### Additional UI Improvements
+- [x] Change Case Materials placeholder texts to italic "optional"
+  - LT Comments: "optional" (italic)
+  - Expert: "optional" (italic)
+  - Other: "optional" (italic)
+- [x] Set Web Search to enabled by default (useState(true))
