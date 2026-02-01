@@ -366,7 +366,7 @@ export default function Home() {
 
   const getSourceBadgeColor = (type: string) => {
     switch (type) {
-      case "Boss": return "bg-blue-100 text-blue-800 border-blue-200";
+      case "LT comments": return "bg-blue-100 text-blue-800 border-blue-200";
       case "Expert": return "bg-green-100 text-green-800 border-green-200";
       case "PDF": return "bg-purple-100 text-purple-800 border-purple-200";
       case "Report": return "bg-indigo-100 text-indigo-800 border-indigo-200"; // 券商研报/咨询报告
@@ -433,6 +433,9 @@ export default function Home() {
                   <Image className="w-5 h-5" />
                   Chart Image
                 </CardTitle>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Please include chart title
+                </p>
               </CardHeader>
               <CardContent>
                 <div 
@@ -489,25 +492,36 @@ export default function Home() {
                     </label>
                   )}
                 </div>
+                
+                {/* Chart example */}
+                <div className="mt-4">
+                  <p className="text-xs text-muted-foreground mb-2">Example:</p>
+                  <img 
+                    src="/chart-example.png" 
+                    alt="Chart example with title" 
+                    className="rounded-lg border border-border shadow-sm max-w-xs"
+                  />
+                </div>
 
                 <Separator className="my-6" />
 
                 {/* Industry Input */}
                 <div className="space-y-3 mb-6">
-                  <div className="flex items-center gap-2">
-                    <Building2 className="w-4 h-4 text-muted-foreground" />
-                    <Label htmlFor="industry">Industry Name</Label>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-muted-foreground" />
+                      <Label htmlFor="industry">Industry Name</Label>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Auto-generated from chart, editable
+                    </p>
                   </div>
                   <Input
                     id="industry"
-                    placeholder="e.g., 现制咖啡, 新能源汽车, 医美"
+                    placeholder="e.g., fresh-made coffee, EV, etc."
                     value={industry}
                     onChange={(e) => setIndustry(e.target.value)}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Enter the industry to filter relevant sources (required for web search)
-                  </p>
-
                 </div>
 
                 <Separator className="my-6" />
@@ -519,7 +533,7 @@ export default function Home() {
                     <div>
                       <Label htmlFor="web-search" className="text-sm font-medium">Web Search</Label>
                       <p className="text-xs text-muted-foreground">
-                        Search for authoritative sources (券商研报, consulting reports)
+                        Search online for sources (analyst reports, 3rd-party reports, etc.)
                       </p>
                     </div>
                   </div>
@@ -543,13 +557,16 @@ export default function Home() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <FileText className="w-5 h-5" />
-                    Research Materials
+                    Case Materials
                   </CardTitle>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Please upload supporting materials (optional)
+                  </p>
                 </CardHeader>
                 <CardContent>
                   <Tabs defaultValue="boss" className="w-full">
                     <TabsList className="grid w-full grid-cols-4">
-                      <TabsTrigger value="boss">Boss</TabsTrigger>
+                      <TabsTrigger value="boss">LT comments</TabsTrigger>
                       <TabsTrigger value="pdf">PDFs</TabsTrigger>
                       <TabsTrigger value="expert">Expert</TabsTrigger>
                       <TabsTrigger value="other">Other</TabsTrigger>
@@ -557,9 +574,9 @@ export default function Home() {
 
                     <TabsContent value="boss" className="mt-4">
                       <div className="space-y-2">
-                        <Label>Boss Comments</Label>
+                        <Label>LT Comments</Label>
                         <Textarea
-                          placeholder="Enter your boss's comments about the market trends..."
+                          placeholder="Enter leadership team's comments about the market trends..."
                           value={bossComments}
                           onChange={(e) => setBossComments(e.target.value)}
                           rows={6}

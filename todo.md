@@ -394,3 +394,31 @@
 - [x] Added STRUCTURE REQUIREMENTS section with correct/wrong examples
 - [x] Emphasized 2-3 separate L1 bullets with mandatory sub-bullets
 - [x] Added Manuka Honey example showing correct time-based structure
+
+## v3.6 - Frontend UI Text and Label Improvements (Jan 25)
+
+### Chart Image Section
+- [x] Add hint text below Chart Image: "Please include chart title"
+- [x] Add reference example using yogurt chart image
+
+### Industry Name Section
+- [x] Add hint text below Industry Name: "Auto-generated from chart, editable"
+- [x] Remove old hint text: "Enter the industry to filter relevant sources (required for web search)"
+
+### Web Search Section
+- [x] Update description from "Search for authoritative sources (券商研报, consulting reports)" to "Search online for sources (analyst reports, 3rd-party reports, etc.)"
+
+### Research Materials Section
+- [x] Rename "Research Materials" to "Case Materials"
+- [x] Add hint text: "Please upload supporting materials (optional)"
+- [x] Replace all "Boss" references with "LT comments"
+- [x] Update tab label from "Boss" to "LT comments"
+- [x] Update field label from "Boss Comments" to "LT Comments"
+- [x] Update placeholder text accordingly
+
+### Final UI Refinements
+- [x] Move all hint texts to CardHeader (right below title)
+- [x] Replace example chart image with new yogurt chart
+- [x] Remove dropdown for example, show directly
+- [x] Reduce example image size (max-w-xs)
+- [x] Update Industry Name placeholder to English: "e.g., fresh-made coffee, EV, etc."
